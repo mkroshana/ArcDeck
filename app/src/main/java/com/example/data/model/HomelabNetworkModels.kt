@@ -74,6 +74,22 @@ data class ProxmoxNodeStatus(
         }
 }
 
+@JsonClass(generateAdapter = true)
+data class ProxmoxStorageResponse(
+    @Json(name = "data") val data: List<ProxmoxStorage>
+)
+
+@JsonClass(generateAdapter = true)
+data class ProxmoxStorage(
+    @Json(name = "storage") val storage: String,
+    @Json(name = "type") val type: String = "",
+    @Json(name = "active") val active: Int = 1,
+    @Json(name = "total") val total: Long = 0L,
+    @Json(name = "used") val used: Long = 0L,
+    @Json(name = "avail") val avail: Long = 0L,
+    @Json(name = "shared") val shared: Int = 0
+)
+
 // ============================================================================
 // UNRAID MODELS — Matches the real Unraid GraphQL API schema
 // ============================================================================

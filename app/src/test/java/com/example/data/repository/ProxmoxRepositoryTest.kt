@@ -252,5 +252,76 @@ class ProxmoxRepositoryTest {
         assertEquals(12345L, status.uptime)
         assertEquals("online", status.status)
     }
+
+    @Test
+    fun testStorageParsing() = runBlocking {
+        val jsonResponse = """
+            {
+              "data": [
+                {
+                  "storage": "local",
+                  "type": "dir",
+                  "active": 1,
+                  "total": 1000000000,
+                  "used": 400000000,
+                  "avail": 600000000,
+                  "shared": 0
+                },
+                {
+                  "storage": "backup",
+                  "type": "nfs",
+                  "active": 0,
+                  "total": 0,
+                  "used": 0,
+                  "avail": 0,
+                  "shared": 1
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val client = OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val request = chain.request()
+                Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(jsonResponse.toResponseBody("application/json".toMediaTypeOrNull()))
+                    .build()
+            }
+            .build()
+
+        val repository = ProxmoxRepository(client)
+        val result = repository.getNodeStorage(
+            baseUrl = "https://192.168.1.10:8006",
+            token = "root@pam!token=1234",
+            node = "pve",
+            useDemoFallback = false
+        )
+
+        assertTrue(result.isSuccess)
+        val storageList = result.getOrThrow()
+        assertEquals(2, storageList.size)
+
+        val first = storageList[0]
+        assertEquals("local", first.storage)
+        assertEquals("dir", first.type)
+        assertEquals(1, first.active)
+        assertEquals(1000000000L, first.total)
+        assertEquals(400000000L, first.used)
+        assertEquals(600000000L, first.avail)
+        assertEquals(0, first.shared)
+
+        val second = storageList[1]
+        assertEquals("backup", second.storage)
+        assertEquals("nfs", second.type)
+        assertEquals(0, second.active)
+        assertEquals(0L, second.total)
+        assertEquals(0L, second.used)
+        assertEquals(0L, second.avail)
+        assertEquals(1, second.shared)
+    }
 }
 

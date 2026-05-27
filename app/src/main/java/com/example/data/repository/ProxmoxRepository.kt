@@ -2,6 +2,7 @@ package com.example.data.repository
 
 import com.example.data.model.ProxmoxResource
 import com.example.data.model.ProxmoxNodeStatus
+import com.example.data.model.ProxmoxStorage
 import com.example.data.network.ProxmoxService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -99,6 +100,42 @@ class ProxmoxRepository(
     }
 
     /**
+     * Fetch Node Storage Pools from Proxmox VE.
+     */
+    suspend fun getNodeStorage(
+        baseUrl: String,
+        token: String,
+        node: String,
+        useDemoFallback: Boolean = true
+    ): Result<List<ProxmoxStorage>> = withContext(Dispatchers.IO) {
+        if (useDemoFallback || baseUrl.isBlank() || baseUrl.contains("example.com")) {
+            return@withContext Result.success(getDemoNodeStorage())
+        }
+
+        try {
+            val service = getProxmoxService(baseUrl)
+            val authHeader = sanitizeToken(token)
+            val response = service.getNodeStorage(authHeader, node)
+            Result.success(response.data)
+        } catch (e: Exception) {
+            if (useDemoFallback) {
+                Result.success(getDemoNodeStorage())
+            } else {
+                Result.failure(e)
+            }
+        }
+    }
+
+    private fun getDemoNodeStorage(): List<ProxmoxStorage> {
+        return listOf(
+            ProxmoxStorage("local", "dir", 1, 103031023616L, 47910236160L, 55120787456L, 0),
+            ProxmoxStorage("local-lvm", "lvmthin", 1, 858900000000L, 512000000000L, 346900000000L, 0),
+            ProxmoxStorage("nas-backup", "nfs", 1, 4000000000000L, 1200000000000L, 2800000000000L, 1),
+            ProxmoxStorage("inactive-store", "nfs", 0, 0, 0, 0, 1)
+        )
+    }
+
+    /**
      * Handle VM/LXC Power state lifecycle transitions.
      * action: "start", "stop", "shutdown"
      */
@@ -131,6 +168,18 @@ class ProxmoxRepository(
                 "shutdown" -> {
                     if (isQemu) service.shutdownVirtualMachine(authHeader, node, resource.vmid)
                     else service.shutdownLxcContainer(authHeader, node, resource.vmid)
+                }
+                "reboot" -> {
+                    if (isQemu) service.rebootVirtualMachine(authHeader, node, resource.vmid)
+                    else service.rebootLxcContainer(authHeader, node, resource.vmid)
+                }
+                "suspend" -> {
+                    if (isQemu) service.suspendVirtualMachine(authHeader, node, resource.vmid)
+                    else throw IllegalArgumentException("Suspend not supported for LXC in this version")
+                }
+                "resume" -> {
+                    if (isQemu) service.resumeVirtualMachine(authHeader, node, resource.vmid)
+                    else throw IllegalArgumentException("Resume not supported for LXC in this version")
                 }
                 else -> throw IllegalArgumentException("Unknown command: $action")
             }

@@ -64,6 +64,7 @@ fun MissionControlScreen(
     // api list values
     val pveResources by viewModel.proxmoxResources.collectAsStateWithLifecycle()
     val pveNodeStatus by viewModel.proxmoxNodeStatus.collectAsStateWithLifecycle()
+    val pveStorage by viewModel.proxmoxStorage.collectAsStateWithLifecycle()
     val arrItems by viewModel.arrQueue.collectAsStateWithLifecycle()
 
     // Unraid state flows
@@ -211,6 +212,7 @@ fun MissionControlScreen(
                 "compute" -> ComputeView(
                     resources = pveResources,
                     nodeStatus = pveNodeStatus,
+                    storageList = pveStorage,
                     isLoading = loadingPve,
                     error = pveErr,
                     nodeName = pveNode,
@@ -1334,6 +1336,107 @@ fun NodeStatusCard(nodeStatus: ProxmoxNodeStatus, nodeName: String) {
     }
 }
 
+@Composable
+fun NodeStoragePoolsSection(storageList: List<ProxmoxStorage>) {
+    if (storageList.isEmpty()) return
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = "NODE STORAGE POOLS",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = AccentPulse,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 1.2.sp,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+
+        storageList.forEach { pool ->
+            val isActive = pool.active == 1
+            val stateColor = if (isActive) TechOk else TechCritical
+            val usagePercent = if (pool.total > 0) (pool.used.toFloat() / pool.total.toFloat()) else 0f
+
+            val totalGb = pool.total / 1_000_000_000.0
+            val usedGb = pool.used / 1_000_000_000.0
+            val format = remember { DecimalFormat("#,##0.0") }
+            val displayCapacity = if (isActive) "${format.format(usedGb)} / ${format.format(totalGb)} GB" else "Offline"
+
+            GlassmorphicCard(
+                modifier = Modifier.fillMaxWidth(),
+                borderColor = ThemeCardBorder.copy(alpha = 0.4f),
+                fillColor = ThemeCardFill
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(stateColor, CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = pool.storage,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                text = "Type: ${pool.type.uppercase()}${if (pool.shared == 1) " (Shared)" else ""}",
+                                color = SecondaryTech,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.weight(1.2f)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = displayCapacity,
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        if (isActive && pool.total > 0L) {
+                            LinearProgressIndicator(
+                                progress = { usagePercent },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .clip(RoundedCornerShape(50.dp)),
+                                color = if (usagePercent > 0.85f) TechCritical else if (usagePercent > 0.7f) TechWarning else PrimaryNeon,
+                                trackColor = ThemeCardBorder
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ============================================================================
 // 2. COMPUTE MANAGER VIEW (Proxmox Virtual Machines & LXCs)
 // ============================================================================
@@ -1341,6 +1444,7 @@ fun NodeStatusCard(nodeStatus: ProxmoxNodeStatus, nodeName: String) {
 fun ComputeView(
     resources: List<ProxmoxResource>,
     nodeStatus: ProxmoxNodeStatus?,
+    storageList: List<ProxmoxStorage>,
     isLoading: Boolean,
     error: String?,
     nodeName: String,
@@ -1356,7 +1460,8 @@ fun ComputeView(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Spacer(modifier = Modifier.height(4.dp))
@@ -1388,6 +1493,8 @@ fun ComputeView(
             NodeStatusCard(nodeStatus = it, nodeName = nodeName)
         }
 
+        NodeStoragePoolsSection(storageList = storageList)
+
         // Search Input
         OutlinedTextField(
             value = searchQuery,
@@ -1414,7 +1521,7 @@ fun ComputeView(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .height(250.dp),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(color = PrimaryNeon)
@@ -1423,7 +1530,6 @@ fun ComputeView(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
                     .padding(20.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -1463,13 +1569,11 @@ fun ComputeView(
                 Spacer(modifier = Modifier.height(10.dp))
             }
 
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+            Column(
+                modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(filteredList, key = { it.vmid }) { resource ->
+                filteredList.forEach { resource ->
                     ResourceItemCard(
                         resource = resource,
                         onPowerAction = { action -> onPowerAction(resource, action) }
@@ -1477,21 +1581,17 @@ fun ComputeView(
                 }
 
                 if (filteredList.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(120.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = "No matching virtual resources found.", color = SecondaryTech, fontSize = 13.sp)
-                        }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "No matching virtual resources found.", color = SecondaryTech, fontSize = 13.sp)
                     }
                 }
 
-                item {
-                    Spacer(modifier = Modifier.height(20.dp))
-                }
+                Spacer(modifier = Modifier.height(20.dp))
             }
         }
     }
@@ -1503,8 +1603,16 @@ fun ResourceItemCard(
     onPowerAction: (String) -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
-    val isRunning = resource.status.lowercase() == "running"
-    val badgeColor = if (isRunning) TechOk else TechCritical
+    val statusClean = resource.status.lowercase()
+    val isRunning = statusClean == "running"
+    val isPaused = statusClean == "paused" || statusClean == "suspended"
+    val isStopped = statusClean == "stopped"
+
+    val badgeColor = when {
+        isRunning -> TechOk
+        isPaused -> TechWarning
+        else -> TechCritical
+    }
 
     val memoryGb = resource.maxMemory / 1_000_000_000.0
     val usedGb = resource.memoryUsed / 1_000_000_000.0
@@ -1584,7 +1692,7 @@ fun ResourceItemCard(
                             )
                             Spacer(modifier = Modifier.width(5.dp))
                             Text(
-                                text = if (isRunning) "Running" else "Stopped",
+                                text = resource.status.replaceFirstChar { it.uppercase() },
                                 color = badgeColor,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
@@ -1611,39 +1719,83 @@ fun ResourceItemCard(
                         onDismissRequest = { menuExpanded = false },
                         modifier = Modifier.background(ThemeCardFill).border(1.dp, ThemeCardBorder)
                     ) {
-                        DropdownMenuItem(
-                            text = { Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(6.dp).background(TechOk, CircleShape))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Start", color = Color.White, fontSize = 12.sp)
-                            }},
-                            onClick = {
-                                onPowerAction("start")
-                                menuExpanded = false
+                        if (isStopped) {
+                            DropdownMenuItem(
+                                text = { Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(modifier = Modifier.size(6.dp).background(TechOk, CircleShape))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Start", color = Color.White, fontSize = 12.sp)
+                                }},
+                                onClick = {
+                                    onPowerAction("start")
+                                    menuExpanded = false
+                                }
+                            )
+                        }
+                        if (isRunning) {
+                            DropdownMenuItem(
+                                text = { Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(modifier = Modifier.size(6.dp).background(PrimaryNeon, CircleShape))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Reboot", color = Color.White, fontSize = 12.sp)
+                                }},
+                                onClick = {
+                                    onPowerAction("reboot")
+                                    menuExpanded = false
+                                }
+                            )
+                            val isQemu = resource.type.lowercase().contains("qemu") || resource.type == "VM"
+                            if (isQemu) {
+                                DropdownMenuItem(
+                                    text = { Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(modifier = Modifier.size(6.dp).background(TechWarning, CircleShape))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Suspend", color = Color.White, fontSize = 12.sp)
+                                    }},
+                                    onClick = {
+                                        onPowerAction("suspend")
+                                        menuExpanded = false
+                                    }
+                                )
                             }
-                        )
-                        DropdownMenuItem(
-                            text = { Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(6.dp).background(TechWarning, CircleShape))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Shutdown", color = Color.White, fontSize = 12.sp)
-                            }},
-                            onClick = {
-                                onPowerAction("shutdown")
-                                menuExpanded = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(6.dp).background(TechCritical, CircleShape))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Stop (Force)", color = Color.White, fontSize = 12.sp)
-                            }},
-                            onClick = {
-                                onPowerAction("stop")
-                                menuExpanded = false
-                            }
-                        )
+                            DropdownMenuItem(
+                                text = { Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(modifier = Modifier.size(6.dp).background(TechWarning, CircleShape))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Shutdown", color = Color.White, fontSize = 12.sp)
+                                }},
+                                onClick = {
+                                    onPowerAction("shutdown")
+                                    menuExpanded = false
+                                }
+                            )
+                        }
+                        if (isPaused) {
+                            DropdownMenuItem(
+                                text = { Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(modifier = Modifier.size(6.dp).background(TechOk, CircleShape))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Resume", color = Color.White, fontSize = 12.sp)
+                                }},
+                                onClick = {
+                                    onPowerAction("resume")
+                                    menuExpanded = false
+                                }
+                            )
+                        }
+                        if (isRunning || isPaused) {
+                            DropdownMenuItem(
+                                text = { Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(modifier = Modifier.size(6.dp).background(TechCritical, CircleShape))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Stop (Force)", color = Color.White, fontSize = 12.sp)
+                                }},
+                                onClick = {
+                                    onPowerAction("stop")
+                                    menuExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
             }

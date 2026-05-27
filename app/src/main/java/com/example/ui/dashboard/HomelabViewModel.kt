@@ -119,6 +119,9 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
     private val _proxmoxNodeStatus = MutableStateFlow<ProxmoxNodeStatus?>(null)
     val proxmoxNodeStatus = _proxmoxNodeStatus.asStateFlow()
 
+    private val _proxmoxStorage = MutableStateFlow<List<ProxmoxStorage>>(emptyList())
+    val proxmoxStorage = _proxmoxStorage.asStateFlow()
+
     // API UI States — Unraid (real schema)
     private val _unraidArray = MutableStateFlow<UnraidArray?>(null)
     val unraidArray = _unraidArray.asStateFlow()
@@ -289,6 +292,16 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
         )
         pveStatusResult.onSuccess {
             _proxmoxNodeStatus.value = it
+        }
+        // Fetch Proxmox Node Storage
+        val pveStorageResult = proxmoxRepository.getNodeStorage(
+            baseUrl = proxmoxUrl.value,
+            token = proxmoxToken.value,
+            node = proxmoxNode.value,
+            useDemoFallback = demo
+        )
+        pveStorageResult.onSuccess {
+            _proxmoxStorage.value = it
         }
         // Network simulation
         val down = 1.0 + Random.nextDouble(1.0, 150.0)

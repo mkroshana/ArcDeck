@@ -66,4 +66,38 @@ interface ProxmoxService {
         @Path("node") node: String,
         @Path("vmid") vmid: Int
     ): ProxmoxPowerActionResponse
+
+    @GET("api2/json/nodes/{node}/storage")
+    suspend fun getNodeStorage(
+        @Header("Authorization") token: String,
+        @Path("node") node: String
+    ): com.example.data.model.ProxmoxStorageResponse
+
+    @POST("api2/json/nodes/{node}/qemu/{vmid}/status/reboot")
+    suspend fun rebootVirtualMachine(
+        @Header("Authorization") token: String,
+        @Path("node") node: String,
+        @Path("vmid") vmid: Int
+    ): ProxmoxPowerActionResponse
+
+    @POST("api2/json/nodes/{node}/qemu/{vmid}/status/suspend")
+    suspend fun suspendVirtualMachine(
+        @Header("Authorization") token: String,
+        @Path("node") node: String,
+        @Path("vmid") vmid: Int
+    ): ProxmoxPowerActionResponse
+
+    @POST("api2/json/nodes/{node}/qemu/{vmid}/status/resume")
+    suspend fun resumeVirtualMachine(
+        @Header("Authorization") token: String,
+        @Path("node") node: String,
+        @Path("vmid") vmid: Int
+    ): ProxmoxPowerActionResponse
+
+    @POST("api2/json/nodes/{node}/lxc/{vmid}/status/reboot")
+    suspend fun rebootLxcContainer(
+        @Header("Authorization") token: String,
+        @Path("node") node: String,
+        @Path("vmid") vmid: Int
+    ): ProxmoxPowerActionResponse
 }
