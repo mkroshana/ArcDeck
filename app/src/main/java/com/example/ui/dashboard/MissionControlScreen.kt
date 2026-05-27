@@ -63,6 +63,7 @@ fun MissionControlScreen(
 
     // api list values
     val pveResources by viewModel.proxmoxResources.collectAsStateWithLifecycle()
+    val pveNodeStatus by viewModel.proxmoxNodeStatus.collectAsStateWithLifecycle()
     val arrItems by viewModel.arrQueue.collectAsStateWithLifecycle()
 
     // Unraid state flows
@@ -209,6 +210,7 @@ fun MissionControlScreen(
                 )
                 "compute" -> ComputeView(
                     resources = pveResources,
+                    nodeStatus = pveNodeStatus,
                     isLoading = loadingPve,
                     error = pveErr,
                     nodeName = pveNode,
@@ -1194,12 +1196,151 @@ fun ArrayDiskRow(disk: UnraidArrayDisk, poolTypes: Map<String, String> = emptyMa
 }
 
 
+@Composable
+fun NodeStatusCard(nodeStatus: ProxmoxNodeStatus, nodeName: String) {
+    val stateColor = if (nodeStatus.status == "online") TechOk else TechCritical
+
+    val memoryGb = nodeStatus.maxmem / 1_000_000_000.0
+    val usedGb = nodeStatus.mem / 1_000_000_000.0
+    val format = remember { DecimalFormat("#,##0.0") }
+    val ramDisplay = "${format.format(usedGb)} / ${format.format(memoryGb)} GB"
+    val ramPercent = if (nodeStatus.maxmem > 0) (nodeStatus.mem.toFloat() / nodeStatus.maxmem.toFloat()) else 0f
+
+    val cpuPercent = (nodeStatus.cpu * 100).toFloat()
+    
+    val uptimeDays = nodeStatus.uptime / 86400.0
+    val uptimeHrs = (nodeStatus.uptime % 86400) / 3600.0
+    val uptimeDisplay = if (uptimeDays >= 1.0) {
+        "${uptimeDays.toInt()}d ${uptimeHrs.toInt()}h"
+    } else {
+        "${uptimeHrs.toInt()}h"
+    }
+
+    GlassmorphicCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("node_status_card"),
+        borderColor = stateColor.copy(alpha = 0.3f),
+        fillColor = ThemeCardFill
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .background(stateColor, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Node $nodeName Status",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                        Text(
+                            text = "Uptime: $uptimeDisplay · Cores: ${nodeStatus.maxCpu}",
+                            color = SecondaryTech,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50.dp))
+                        .background(stateColor.copy(alpha = 0.15f))
+                        .padding(horizontal = 10.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = nodeStatus.status.uppercase(),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = stateColor,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+
+            // Gauges
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // CPU
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(text = "CPU Load", color = SecondaryTech, fontSize = 11.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LinearProgressIndicator(
+                            progress = { cpuPercent / 100f },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(50.dp)),
+                            color = PrimaryNeon,
+                            trackColor = ThemeCardBorder
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "${cpuPercent.toInt()}%",
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // RAM
+                Column(
+                    modifier = Modifier.weight(1.2f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(text = "Memory Usage", color = SecondaryTech, fontSize = 11.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LinearProgressIndicator(
+                            progress = { ramPercent },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(50.dp)),
+                            color = AccentPulse,
+                            trackColor = ThemeCardBorder
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = ramDisplay,
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ============================================================================
 // 2. COMPUTE MANAGER VIEW (Proxmox Virtual Machines & LXCs)
 // ============================================================================
 @Composable
 fun ComputeView(
     resources: List<ProxmoxResource>,
+    nodeStatus: ProxmoxNodeStatus?,
     isLoading: Boolean,
     error: String?,
     nodeName: String,
@@ -1241,6 +1382,10 @@ fun ComputeView(
                     fontSize = 11.sp
                 )
             }
+        }
+
+        nodeStatus?.let {
+            NodeStatusCard(nodeStatus = it, nodeName = nodeName)
         }
 
         // Search Input
@@ -2432,6 +2577,24 @@ fun SettingsView(
                     ),
                     modifier = Modifier.fillMaxWidth().testTag("setting_pve_token")
                 )
+
+                val tokenClean = pveToken.trim()
+                val isJustSecret = tokenClean.isNotEmpty() && !tokenClean.contains("!")
+                
+                if (isJustSecret) {
+                    Text(
+                        text = "⚠️ Enter the full token (USER@REALM!TOKENID=SECRET), not just the secret key!",
+                        color = TechWarning,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                } else {
+                    Text(
+                        text = "Format: USER@REALM!TOKENID=SECRET (e.g. root@pam!token-name=1234-abcd-...)",
+                        color = SecondaryTech.copy(alpha = 0.7f),
+                        fontSize = 11.sp
+                    )
+                }
             }
         }
 

@@ -2,9 +2,16 @@ package com.example.data.network
 
 import com.example.data.model.ProxmoxPowerActionResponse
 import com.example.data.model.ProxmoxResourceResponse
+import com.example.data.model.ProxmoxNodeStatusResponse
 import retrofit2.http.*
 
 interface ProxmoxService {
+
+    @GET("api2/json/nodes/{node}/status")
+    suspend fun getNodeStatus(
+        @Header("Authorization") token: String,
+        @Path("node") node: String
+    ): ProxmoxNodeStatusResponse
 
     @GET("api2/json/nodes/{node}/qemu")
     suspend fun getVirtualMachines(

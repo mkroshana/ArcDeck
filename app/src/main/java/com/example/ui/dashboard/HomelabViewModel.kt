@@ -116,6 +116,9 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
     private val _proxmoxResources = MutableStateFlow<List<ProxmoxResource>>(emptyList())
     val proxmoxResources = _proxmoxResources.asStateFlow()
 
+    private val _proxmoxNodeStatus = MutableStateFlow<ProxmoxNodeStatus?>(null)
+    val proxmoxNodeStatus = _proxmoxNodeStatus.asStateFlow()
+
     // API UI States — Unraid (real schema)
     private val _unraidArray = MutableStateFlow<UnraidArray?>(null)
     val unraidArray = _unraidArray.asStateFlow()
@@ -277,7 +280,16 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
             _unraidCpuUtil.value = cpu
             _unraidMemoryUtil.value = mem
         }
-
+        // Fetch Proxmox Node Status
+        val pveStatusResult = proxmoxRepository.getNodeStatus(
+            baseUrl = proxmoxUrl.value,
+            token = proxmoxToken.value,
+            node = proxmoxNode.value,
+            useDemoFallback = demo
+        )
+        pveStatusResult.onSuccess {
+            _proxmoxNodeStatus.value = it
+        }
         // Network simulation
         val down = 1.0 + Random.nextDouble(1.0, 150.0)
         val up = 0.5 + Random.nextDouble(0.1, 15.0)
@@ -421,8 +433,13 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
         val cpuUtil = _unraidCpuUtil.value
         val memUtil = _unraidMemoryUtil.value
 
-        // RAM: prefer Unraid memory utilization, fallback to Proxmox VM aggregate
-        if (memUtil != null && memUtil.total > 0) {
+        val pveNode = _proxmoxNodeStatus.value
+
+        // RAM: prefer Proxmox node status, fallback to Unraid, fallback to VM aggregate
+        if (pveNode != null && pveNode.maxmem > 0) {
+            val percentage = (pveNode.mem.toDouble() / pveNode.maxmem.toDouble()) * 100
+            _currentRam.value = percentage.toInt().coerceIn(1, 99)
+        } else if (memUtil != null && memUtil.total > 0) {
             _currentRam.value = memUtil.percentTotal.toInt().coerceIn(5, 99)
         } else if (pmList.isNotEmpty()) {
             val totalRam = pmList.sumOf { it.maxMemory }
@@ -432,8 +449,11 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
-        // CPU: prefer Unraid CPU utilization
-        if (cpuUtil != null) {
+        // CPU: prefer Proxmox node status, fallback to Unraid CPU
+        if (pveNode != null) {
+            val percentage = pveNode.cpu * 100
+            _currentCpu.value = percentage.toInt().coerceIn(1, 99)
+        } else if (cpuUtil != null) {
             _currentCpu.value = cpuUtil.percentTotal.toInt().coerceIn(1, 99)
         }
 

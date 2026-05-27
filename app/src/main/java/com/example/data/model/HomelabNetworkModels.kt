@@ -16,7 +16,7 @@ data class ProxmoxResourceResponse(
 data class ProxmoxResource(
     @Json(name = "vmid") val vmid: Int,
     @Json(name = "name") val name: String,
-    @Json(name = "type") val type: String, // "qemu" (VM) or "lxc" (Container)
+    @Json(name = "type") val type: String = "", // "qemu" (VM) or "lxc" (Container)
     @Json(name = "status") val status: String, // "running", "stopped"
     @Json(name = "cpu") val cpuUsage: Double = 0.0,
     @Json(name = "maxcpu") val maxCpu: Int = 1,
@@ -29,6 +29,50 @@ data class ProxmoxResource(
 data class ProxmoxPowerActionResponse(
     @Json(name = "data") val taskUpid: String?
 )
+
+@JsonClass(generateAdapter = true)
+data class ProxmoxNodeStatusResponse(
+    @Json(name = "data") val data: ProxmoxNodeStatus
+)
+
+@JsonClass(generateAdapter = true)
+data class ProxmoxNodeStatus(
+    @Json(name = "cpu") val cpu: Double = 0.0,
+    @Json(name = "maxcpu") val maxCpu: Int = 1,
+    @Json(name = "uptime") val uptime: Long = 0L,
+    @Json(name = "status") val status: String = "online",
+    @Json(name = "mem") val memRaw: Any? = null,
+    @Json(name = "maxmem") val flatMaxmem: Long? = null,
+    @Json(name = "memory") val memoryRaw: Any? = null
+) {
+    val mem: Long
+        get() {
+            (memoryRaw as? Map<*, *>)?.let { map ->
+                (map["used"] as? Number)?.toLong()?.let { return it }
+            }
+            when (val raw = memRaw) {
+                is Number -> return raw.toLong()
+                is Map<*, *> -> {
+                    (raw["used"] as? Number)?.toLong()?.let { return it }
+                }
+            }
+            return 0L
+        }
+
+    val maxmem: Long
+        get() {
+            (memoryRaw as? Map<*, *>)?.let { map ->
+                (map["total"] as? Number)?.toLong()?.let { return it }
+            }
+            flatMaxmem?.let { return it }
+            when (val raw = memRaw) {
+                is Map<*, *> -> {
+                    (raw["total"] as? Number)?.toLong()?.let { return it }
+                }
+            }
+            return 1024L
+        }
+}
 
 // ============================================================================
 // UNRAID MODELS — Matches the real Unraid GraphQL API schema
