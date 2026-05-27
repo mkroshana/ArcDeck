@@ -367,3 +367,56 @@ data class ArrQueueItem(
     @Json(name = "downloadId") val downloadId: String? = null,
     @Json(name = "protocol") val protocol: String? = "usenet" // "torrent" or "usenet"
 )
+
+@JsonClass(generateAdapter = true)
+data class ArrHistoryResponse(
+    @Json(name = "page") val page: Int = 1,
+    @Json(name = "pageSize") val pageSize: Int = 10,
+    @Json(name = "totalRecords") val totalRecords: Int = 0,
+    @Json(name = "records") val records: List<ArrHistoryItem> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class ArrHistoryItem(
+    @Json(name = "id") val id: Int,
+    @Json(name = "movieId") val movieId: Int? = null,
+    @Json(name = "sourceTitle") val sourceTitle: String? = null,
+    @Json(name = "quality") val quality: ArrHistoryQuality? = null,
+    @Json(name = "languages") val languages: List<ArrHistoryLanguage> = emptyList(),
+    @Json(name = "date") val date: String? = null,
+    @Json(name = "eventType") val eventType: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ArrHistoryQuality(
+    @Json(name = "quality") val quality: ArrHistoryQualityDetails? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ArrHistoryQualityDetails(
+    @Json(name = "name") val name: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ArrHistoryLanguage(
+    @Json(name = "name") val name: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ArrMovie(
+    @Json(name = "id") val id: Int,
+    @Json(name = "title") val title: String,
+    @Json(name = "year") val year: Int = 0,
+    @Json(name = "monitored") val monitored: Boolean = true,
+    @Json(name = "hasFile") val hasFile: Boolean = false,
+    @Json(name = "sizeOnDisk") val sizeOnDisk: Long = 0L,
+    @Json(name = "images") val images: List<ArrMovieImage> = emptyList(),
+    @Json(name = "added") val added: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ArrMovieImage(
+    @Json(name = "coverType") val coverType: String,
+    @Json(name = "url") val url: String,
+    @Json(name = "remoteUrl") val remoteUrl: String? = null
+)

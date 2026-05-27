@@ -66,6 +66,8 @@ fun MissionControlScreen(
     val pveNodeStatus by viewModel.proxmoxNodeStatus.collectAsStateWithLifecycle()
     val pveStorage by viewModel.proxmoxStorage.collectAsStateWithLifecycle()
     val arrItems by viewModel.arrQueue.collectAsStateWithLifecycle()
+    val arrHistory by viewModel.arrHistory.collectAsStateWithLifecycle()
+    val arrMovies by viewModel.arrMovies.collectAsStateWithLifecycle()
 
     // Unraid state flows
     val unraidArray by viewModel.unraidArray.collectAsStateWithLifecycle()
@@ -233,9 +235,12 @@ fun MissionControlScreen(
                 )
                 "media" -> MediaQueueView(
                     queueItems = arrItems,
+                    historyItems = arrHistory,
+                    movies = arrMovies,
                     isLoading = loadingArr,
                     error = arrErrValue,
-                    useDemo = useDemo
+                    useDemo = useDemo,
+                    isTablet = isTablet
                 )
                 "settings" -> SettingsView(
                     viewModel = viewModel,
@@ -2349,10 +2354,15 @@ fun UnraidVmCard(vm: UnraidVmDomain) {
 @Composable
 fun MediaQueueView(
     queueItems: List<ArrQueueItem>,
+    historyItems: List<ArrHistoryItem>,
+    movies: List<ArrMovie>,
     isLoading: Boolean,
     error: String?,
-    useDemo: Boolean
+    useDemo: Boolean,
+    isTablet: Boolean
 ) {
+    var currentSubTab by remember { mutableStateOf("queue") } // "queue", "history", "library"
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -2372,15 +2382,53 @@ fun MediaQueueView(
                 letterSpacing = 1.2.sp
             )
             Text(
-                text = "Live download progress from Radarr/Sonarr instances",
+                text = "Live download progress, history, and library from Radarr/Sonarr instances",
                 color = SecondaryTech,
                 fontSize = 11.sp
             )
         }
 
+        // Sub tab selector
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(ThemeCardFill)
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val tabs = listOf(
+                "queue" to "Queue",
+                "history" to "History",
+                "library" to "Library"
+            )
+            tabs.forEach { (tabId, label) ->
+                val isSelected = currentSubTab == tabId
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isSelected) PrimaryNeon.copy(alpha = 0.15f) else Color.Transparent)
+                        .border(1.dp, if (isSelected) PrimaryNeon.copy(alpha = 0.4f) else Color.Transparent, RoundedCornerShape(6.dp))
+                        .clickable { currentSubTab = tabId }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = label.uppercase(),
+                        color = if (isSelected) Color.White else SecondaryTech,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 1.sp
+                    )
+                }
+            }
+        }
+
         // Output UI State
-        val showLoading = isLoading && queueItems.isEmpty()
-        val showError = error != null && !useDemo && queueItems.isEmpty()
+        val showLoading = isLoading && queueItems.isEmpty() && historyItems.isEmpty() && movies.isEmpty()
+        val showError = error != null && !useDemo && queueItems.isEmpty() && historyItems.isEmpty() && movies.isEmpty()
 
         if (showLoading) {
             Box(
@@ -2441,25 +2489,271 @@ fun MediaQueueView(
                     .weight(1f),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(queueItems, key = { it.id }) { item ->
-                    DownloadQueueItemRow(item = item)
-                }
+                when (currentSubTab) {
+                    "queue" -> {
+                        items(queueItems, key = { it.id }) { item ->
+                            DownloadQueueItemRow(item = item)
+                        }
 
-                if (queueItems.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = "Download queue is completely clear.", color = SecondaryTech, fontSize = 13.sp)
+                        if (queueItems.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(160.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = "Download queue is completely clear.", color = SecondaryTech, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
+                    "history" -> {
+                        items(historyItems, key = { it.id }) { item ->
+                            HistoryItemRow(item = item)
+                        }
+
+                        if (historyItems.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(160.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = "No download history found.", color = SecondaryTech, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
+                    "library" -> {
+                        val columnsCount = if (isTablet) 3 else 2
+                        val movieRows = movies.chunked(columnsCount)
+
+                        items(movieRows) { rowMovies ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                rowMovies.forEach { movie ->
+                                    MovieLibraryCard(
+                                        movie = movie,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                if (rowMovies.size < columnsCount) {
+                                    val emptySlots = columnsCount - rowMovies.size
+                                    repeat(emptySlots) {
+                                        Box(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+
+                        if (movies.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(160.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = "No movies in library.", color = SecondaryTech, fontSize = 13.sp)
+                                }
+                            }
                         }
                     }
                 }
 
                 item {
                     Spacer(modifier = Modifier.height(20.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun HistoryItemRow(item: ArrHistoryItem) {
+    val isGrabbed = item.eventType?.lowercase() == "grabbed"
+    val icon = if (isGrabbed) Icons.Default.Refresh else Icons.Default.CheckCircle
+    val iconColor = if (isGrabbed) PrimaryNeon else TechOk
+
+    GlassmorphicCard(
+        modifier = Modifier.fillMaxWidth(),
+        borderColor = ThemeCardBorder,
+        fillColor = ThemeCardFill
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = item.eventType ?: "History Event",
+                tint = iconColor,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.sourceTitle ?: "Unknown Movie",
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    maxLines = 2,
+                    lineHeight = 16.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val lang = item.languages.firstOrNull()?.name ?: "English"
+                    val quality = item.quality?.quality?.name ?: "Unknown Quality"
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.White.copy(alpha = 0.08f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(text = lang, color = SecondaryTech, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.White.copy(alpha = 0.08f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(text = quality, color = SecondaryTech, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            val displayDate = remember(item.date) {
+                if (item.date?.contains("T") == true) {
+                    try {
+                        val parts = item.date.split("T")
+                        val dateParts = parts[0].split("-")
+                        val timeParts = parts[1].removeSuffix("Z").split(":")
+                        val monthNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                        val month = monthNames[dateParts[1].toInt() - 1]
+                        val day = dateParts[2]
+                        val hour = timeParts[0].toInt()
+                        val minute = timeParts[1]
+                        val ampm = if (hour >= 12) "pm" else "am"
+                        val displayHour = if (hour > 12) hour - 12 else if (hour == 0) 12 else hour
+                        if (dateParts[0] == "2026" && dateParts[1] == "05" && day == "28") {
+                            "$displayHour:$minute$ampm"
+                        } else {
+                            "$month $day"
+                        }
+                    } catch (e: Exception) {
+                        item.date
+                    }
+                } else {
+                    item.date ?: ""
+                }
+            }
+            Text(
+                text = displayDate,
+                color = SecondaryTech,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+fun MovieLibraryCard(movie: ArrMovie, modifier: Modifier = Modifier) {
+    val df = remember { DecimalFormat("#,##0.0") }
+    val sizeOnDiskGb = movie.sizeOnDisk / 1_000_000_000.0
+    val sizeLabel = if (sizeOnDiskGb > 0) "${df.format(sizeOnDiskGb)} GB" else "No File"
+    
+    val posterUrl = movie.images.firstOrNull { it.coverType == "poster" }?.let {
+        if (!it.remoteUrl.isNullOrEmpty()) it.remoteUrl else it.url
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .border(1.dp, ThemeCardBorder, RoundedCornerShape(8.dp)),
+        colors = CardDefaults.cardColors(containerColor = ThemeCardFill)
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(0.67f)
+                    .background(Color.Black.copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!posterUrl.isNullOrEmpty()) {
+                    coil.compose.AsyncImage(
+                        model = posterUrl,
+                        contentDescription = movie.title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        error = androidx.compose.ui.graphics.painter.ColorPainter(Color.White.copy(alpha = 0.1f))
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "No Poster",
+                        tint = SecondaryTech.copy(alpha = 0.3f),
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(if (movie.monitored) TechOk else TechMuted)
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = movie.title,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                Text(
+                    text = if (movie.monitored) "Monitored" else "Unmonitored",
+                    color = if (movie.monitored) TechOk else SecondaryTech,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "${movie.year}",
+                        color = SecondaryTech,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = sizeLabel,
+                        color = SecondaryTech,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
                 }
             }
         }

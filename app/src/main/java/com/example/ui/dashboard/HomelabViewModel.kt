@@ -148,6 +148,12 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
     private val _arrQueue = MutableStateFlow<List<ArrQueueItem>>(emptyList())
     val arrQueue = _arrQueue.asStateFlow()
 
+    private val _arrHistory = MutableStateFlow<List<ArrHistoryItem>>(emptyList())
+    val arrHistory = _arrHistory.asStateFlow()
+
+    private val _arrMovies = MutableStateFlow<List<ArrMovie>>(emptyList())
+    val arrMovies = _arrMovies.asStateFlow()
+
     // Loading states
     private val _isLoadingProxmox = MutableStateFlow(false)
     val isLoadingProxmox = _isLoadingProxmox.asStateFlow()
@@ -325,6 +331,12 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
             if (_arrQueue.value.isEmpty()) {
                 _arrQueue.value = arrRepository.getActiveQueue("", "", true).getOrDefault(emptyList())
             }
+            if (_arrHistory.value.isEmpty()) {
+                _arrHistory.value = arrRepository.getHistory("", "", true).getOrDefault(emptyList())
+            }
+            if (_arrMovies.value.isEmpty()) {
+                _arrMovies.value = arrRepository.getMovies("", "", true).getOrDefault(emptyList())
+            }
             if (_unraidSystemInfo.value == null) {
                 _unraidSystemInfo.value = unraidRepository.getSystemInfo("", "", true).getOrNull()
             }
@@ -390,6 +402,24 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
         }.onFailure {
             _arrError.value = it.localizedMessage ?: "Arr REST Response Timeout"
             repository.insertTerminalLog(TerminalLog(timestamp = System.currentTimeMillis(), level = "ERROR", source = "ARR", message = "Arr API Error: ${it.message}"))
+        }
+
+        // Arr History
+        arrRepository.getHistory(
+            baseUrl = arrUrl.value,
+            apiKey = arrApiKey.value,
+            useDemoFallback = demo
+        ).onSuccess {
+            _arrHistory.value = it
+        }
+
+        // Arr Movies
+        arrRepository.getMovies(
+            baseUrl = arrUrl.value,
+            apiKey = arrApiKey.value,
+            useDemoFallback = demo
+        ).onSuccess {
+            _arrMovies.value = it
         }
     }
 
