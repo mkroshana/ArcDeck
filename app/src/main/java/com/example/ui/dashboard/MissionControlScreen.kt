@@ -1450,7 +1450,7 @@ fun UnraidDetailView(
                     // Memory layout summary
                     if (systemInfo.memory?.layout?.isNotEmpty() == true) {
                         val totalMem = systemInfo.memory!!.layout.sumOf { it.size }
-                        val memGb = totalMem / 1_073_741_824.0
+                        val memGb = totalMem / 1_048_576.0
                         val df = DecimalFormat("#,##0.0")
                         val firstSlot = systemInfo.memory!!.layout.first()
                         SysInfoRow("Memory", "${df.format(memGb)} GB ${firstSlot.type ?: ""} @ ${firstSlot.clockSpeed ?: "—"} MHz")
@@ -1724,7 +1724,7 @@ fun UnraidVmCard(vm: UnraidVmDomain) {
     }
 
     val df = remember { DecimalFormat("#,##0.0") }
-    val memGb = vm.maxMemory / 1_073_741_824.0
+    val memGb = vm.maxMemory?.let { it / 1_073_741_824.0 }
 
     GlassmorphicCard(
         modifier = Modifier.fillMaxWidth(),
@@ -1786,14 +1786,14 @@ fun UnraidVmCard(vm: UnraidVmDomain) {
 
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "${vm.vcpuCount} vCPU",
+                        text = vm.vcpuCount?.let { "$it vCPU" } ?: "— vCPU",
                         color = SecondaryTech,
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "${df.format(memGb)} GB RAM",
+                        text = memGb?.let { "${df.format(it)} GB RAM" } ?: "— RAM",
                         color = SecondaryTech,
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,

@@ -125,21 +125,23 @@ class UnraidRepository(
 
         val query = """
             query {
-                cpuUtilization {
-                    percentTotal
-                    cpus { percentTotal percentUser percentSystem percentIdle }
-                }
-                memoryUtilization {
-                    total used free available percentTotal
-                    swapTotal swapUsed swapFree percentSwapTotal
+                metrics {
+                    cpu {
+                        percentTotal
+                        cpus { percentTotal percentUser percentSystem percentIdle }
+                    }
+                    memory {
+                        total used free available percentTotal
+                        swapTotal swapUsed swapFree percentSwapTotal
+                    }
                 }
             }
         """.trimIndent()
 
         try {
             val response = graphQLClient.executeQuery(endpointUrl, authToken, query)
-            val cpu = response.data?.cpuUtilization
-            val mem = response.data?.memoryUtilization
+            val cpu = response.data?.metrics?.cpu
+            val mem = response.data?.metrics?.memory
             if (cpu != null && mem != null) Result.success(Pair(cpu, mem))
             else Result.failure(IOException("No utilization data returned"))
         } catch (e: Exception) {
@@ -200,7 +202,7 @@ class UnraidRepository(
             query {
                 vms {
                     domain {
-                        id name state vcpuCount currentMemory maxMemory
+                        id name state
                     }
                 }
             }
@@ -305,8 +307,8 @@ class UnraidRepository(
         ),
         memory = UnraidInfoMemory(
             layout = listOf(
-                UnraidMemoryLayout(size = 17179869184, type = "DDR4", clockSpeed = 3200, manufacturer = "Corsair"),
-                UnraidMemoryLayout(size = 17179869184, type = "DDR4", clockSpeed = 3200, manufacturer = "Corsair")
+                UnraidMemoryLayout(size = 16777216, type = "DDR4", clockSpeed = 3200, manufacturer = "Corsair"),
+                UnraidMemoryLayout(size = 16777216, type = "DDR4", clockSpeed = 3200, manufacturer = "Corsair")
             )
         ),
         os = UnraidInfoOs(

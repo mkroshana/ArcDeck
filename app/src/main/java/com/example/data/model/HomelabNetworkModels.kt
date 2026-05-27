@@ -52,8 +52,13 @@ data class UnraidGraphQLData(
     @Json(name = "docker") val docker: UnraidDocker? = null,
     @Json(name = "vms") val vms: UnraidVms? = null,
     @Json(name = "notifications") val notifications: UnraidNotifications? = null,
-    @Json(name = "cpuUtilization") val cpuUtilization: UnraidCpuUtilization? = null,
-    @Json(name = "memoryUtilization") val memoryUtilization: UnraidMemoryUtilization? = null
+    @Json(name = "metrics") val metrics: UnraidMetrics? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class UnraidMetrics(
+    @Json(name = "cpu") val cpu: UnraidCpuUtilization? = null,
+    @Json(name = "memory") val memory: UnraidMemoryUtilization? = null
 )
 
 // --- Array -------------------------------------------------------------------
@@ -253,9 +258,9 @@ data class UnraidVmDomain(
     @Json(name = "id") val id: String = "",
     @Json(name = "name") val name: String = "",
     @Json(name = "state") val state: String = "shutoff", // VmState enum
-    @Json(name = "vcpuCount") val vcpuCount: Int = 0,
-    @Json(name = "currentMemory") val currentMemory: Long = 0, // bytes
-    @Json(name = "maxMemory") val maxMemory: Long = 0
+    @Json(name = "vcpuCount") val vcpuCount: Int? = null,
+    @Json(name = "currentMemory") val currentMemory: Long? = null, // bytes
+    @Json(name = "maxMemory") val maxMemory: Long? = null
 )
 
 // --- Notifications -----------------------------------------------------------
