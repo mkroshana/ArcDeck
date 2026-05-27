@@ -2,6 +2,8 @@ package com.example.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -13,20 +15,23 @@ import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme =
   darkColorScheme(
-    primary = PrimaryNeon,
-    secondary = SecondaryTech,
-    tertiary = AccentPulse,
-    background = ThemeBackground,
-    surface = ThemeBackground,
+    primary = StaticPrimaryNeon,
+    secondary = StaticSecondaryTech,
+    tertiary = StaticAccentPulse,
+    background = StaticThemeBackground,
+    surface = StaticThemeBackground,
     onBackground = Color.White,
     onSurface = Color.White,
     primaryContainer = Color(0x1100E5FF),
-    secondaryContainer = Color(0x1194A3B8)
+    secondaryContainer = Color(0x1194A3B8),
+    surfaceContainer = StaticThemeCardFill,
+    outlineVariant = StaticThemeCardBorder
   )
 
 private val LightColorScheme = DarkColorScheme // Always use dark command center theme for this applet
 
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MyApplicationTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
@@ -45,5 +50,5 @@ fun MyApplicationTheme(
       else -> LightColorScheme
     }
 
-  MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
+  MaterialExpressiveTheme(colorScheme = colorScheme, typography = Typography, content = content)
 }

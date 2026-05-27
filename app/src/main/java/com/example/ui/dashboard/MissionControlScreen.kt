@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 package com.example.ui.dashboard
 
 import androidx.compose.animation.AnimatedVisibility
@@ -144,15 +145,15 @@ fun MissionControlScreen(
                     )
                 )
                 if (loadingPve || loadingUnraid || loadingArr) {
-                    LinearProgressIndicator(
+                    LinearWavyProgressIndicator(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(2.dp),
+                            .height(4.dp),
                         color = PrimaryNeon,
                         trackColor = Color.Transparent
                     )
                 } else {
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                 }
             }
         },
