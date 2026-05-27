@@ -114,7 +114,7 @@ fun MissionControlScreen(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = "HOMELAB COMMAND",
+                                text = "ARCDECK",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 18.sp,
                                 color = Color.White,

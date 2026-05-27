@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Homelab Dashboard</string>
+    <string name="app_name">ArcDeck</string>
     <string name="status_all_operational">All Systems Operational</string>
     <string name="status_degraded">Systems Degraded</string>
     <string name="status_offline">Systems Offline</string>

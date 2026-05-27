@@ -1,6 +1,6 @@
 {
-  "name": "Homelab Dashboard",
-  "description": "A sleek, dark, glassmorphic Homelab Management Dashboard & Command Center to monitor servers, services, and system metrics.",
+  "name": "ArcDeck",
+  "description": "Your personal homelab dashboard. ArcDeck brings your Proxmox, Unraid, and media services together so you can monitor your entire setup at a glance.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
