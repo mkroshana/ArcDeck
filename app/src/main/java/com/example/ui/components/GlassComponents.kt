@@ -14,6 +14,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,12 +57,12 @@ fun CircularMetricRing(
     title: String,
     accentColor: Color,
     modifier: Modifier = Modifier,
-    strokeWidth: Dp = 10.dp,
+    strokeWidth: Dp = 14.dp,
     iconSection: @Composable (ColumnScope.() -> Unit)? = null
 ) {
     val animatedProgress = animateFloatAsState(
         targetValue = percentage.coerceIn(0f, 100f) / 100f,
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        animationSpec = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
         label = "CircularProgress"
     )
 
@@ -70,7 +72,7 @@ fun CircularMetricRing(
         verticalArrangement = Arrangement.Center
     ) {
         Box(
-            modifier = Modifier.size(90.dp),
+            modifier = Modifier.size(100.dp),
             contentAlignment = Alignment.Center
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
@@ -78,9 +80,9 @@ fun CircularMetricRing(
                 val strokePx = strokeWidth.toPx()
                 val radius = (sizeMin - strokePx) / 2
                 
-                // Track 1: Dark translucent background ring
+                // Track 1: Dark translucent background ring (low-opacity container)
                 drawCircle(
-                    color = accentColor.copy(alpha = 0.12f),
+                    color = accentColor.copy(alpha = 0.1f),
                     radius = radius,
                     style = Stroke(width = strokePx)
                 )
@@ -103,22 +105,24 @@ fun CircularMetricRing(
                     iconSection()
                 } else {
                     Text(
-                        text = "${percentage.toInt()}%",
-                        color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
-                        fontSize = 18.sp,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        text = "${(animatedProgress.value * 100).toInt()}%",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = FontFamily.Monospace
                     )
                 }
             }
         }
         
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         
         Text(
             text = title,
-            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
-            fontSize = 13.sp,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+            color = Color.White.copy(alpha = 0.7f),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.5.sp
         )
     }
 }

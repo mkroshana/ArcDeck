@@ -263,28 +263,23 @@ class UnraidRepository(
         state = "STARTED",
         capacity = UnraidArrayCapacity(
             kilobytes = UnraidCapacity(
-                free = "14320000000",  // ~13.3 TB free
-                used = "25680000000", // ~23.9 TB used
-                total = "40000000000" // ~37.3 TB total
+                free = "30303030", // 99% warning capacity
+                used = "3000000000",
+                total = "3030303030"
             ),
-            disks = UnraidCapacity(free = "2", used = "4", total = "6")
+            disks = UnraidCapacity(free = "0", used = "1", total = "1")
         ),
         disks = listOf(
-            UnraidArrayDisk(id = "disk:1", idx = 1, name = "disk1", device = "sdb", size = 8000000000, status = "DISK_OK", rotational = true, temp = 34, numErrors = 0, fsSize = 7814000000, fsFree = 2344200000, fsUsed = 5469800000, type = "DATA", fsType = "xfs", color = "GREEN_ON", isSpinning = true, transport = "sata"),
-            UnraidArrayDisk(id = "disk:2", idx = 2, name = "disk2", device = "sdc", size = 8000000000, status = "DISK_OK", rotational = true, temp = 36, numErrors = 0, fsSize = 7814000000, fsFree = 3125600000, fsUsed = 4688400000, type = "DATA", fsType = "xfs", color = "GREEN_ON", isSpinning = true, transport = "sata"),
-            UnraidArrayDisk(id = "disk:3", idx = 3, name = "disk3", device = "sdd", size = 12000000000, status = "DISK_OK", rotational = true, temp = 32, numErrors = 0, fsSize = 11718000000, fsFree = 4687200000, fsUsed = 7030800000, type = "DATA", fsType = "xfs", color = "GREEN_ON", isSpinning = false, transport = "sata"),
-            UnraidArrayDisk(id = "disk:4", idx = 4, name = "disk4", device = "sde", size = 12000000000, status = "DISK_OK", rotational = true, temp = 35, numErrors = 0, fsSize = 11718000000, fsFree = 4162800000, fsUsed = 7555200000, type = "DATA", fsType = "xfs", color = "GREEN_ON", isSpinning = true, transport = "sata")
+            UnraidArrayDisk(id = "disk:1", idx = 1, name = "disk1", device = "sda", size = 3000000000, status = "DISK_OK", rotational = true, temp = 38, numErrors = 0, fsSize = 3000000000, fsUsed = 3000000000, fsFree = 0, type = "DATA", fsType = "xfs", color = "GREEN_ON", isSpinning = true, transport = "sata")
         ),
         caches = listOf(
-            UnraidArrayDisk(id = "cache:1", idx = 30, name = "cache", device = "nvme0n1", size = 1000000000, status = "DISK_OK", rotational = false, temp = 42, numErrors = 0, fsSize = 976000000, fsFree = 697000000, fsUsed = 279000000, type = "CACHE", fsType = "btrfs", color = "BLUE_ON", isSpinning = false, transport = "nvme"),
-            UnraidArrayDisk(id = "cache:2", idx = 31, name = "cache2", device = "nvme1n1", size = 500000000, status = "DISK_OK", rotational = false, temp = 39, numErrors = 0, fsSize = 488000000, fsFree = 341600000, fsUsed = 146400000, type = "CACHE", fsType = "btrfs", color = "BLUE_ON", isSpinning = false, transport = "nvme")
+            UnraidArrayDisk(id = "cache:1", idx = 30, name = "spinning-disks", device = "sdb", size = 4000000000, status = "DISK_OK", rotational = true, temp = 47, numErrors = 0, fsSize = 8000000000, fsUsed = 5900000000, fsFree = 2100000000, type = "CACHE", fsType = "zfs", color = "BLUE_ON", isSpinning = true, transport = "sata"),
+            UnraidArrayDisk(id = "cache:2", idx = 31, name = "spinning-disks2", device = "sdc", size = 4000000000, status = "DISK_OK", rotational = true, temp = 48, numErrors = 0, fsSize = 0, fsUsed = 0, fsFree = 0, type = "CACHE", fsType = "zfs", color = "BLUE_ON", isSpinning = true, transport = "sata")
         ),
-        parities = listOf(
-            UnraidArrayDisk(id = "parity:1", idx = 0, name = "parity", device = "sda", size = 12000000000, status = "DISK_OK", rotational = true, temp = 37, numErrors = 0, type = "PARITY", isSpinning = true, transport = "sata")
-        ),
+        parities = emptyList(),
         parityCheckStatus = UnraidParityCheck(
             date = "2026-05-25T02:00:00Z",
-            duration = 28800, // 8 hours
+            duration = 25200, // 7 hours
             speed = "125.4",
             status = "COMPLETED",
             errors = 0,
