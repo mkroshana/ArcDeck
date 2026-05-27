@@ -66,6 +66,7 @@ fun MissionControlScreen(
 
     // Unraid state flows
     val unraidArray by viewModel.unraidArray.collectAsStateWithLifecycle()
+    val unraidPoolTypes by viewModel.unraidPoolTypes.collectAsStateWithLifecycle()
     val unraidSystemInfo by viewModel.unraidSystemInfo.collectAsStateWithLifecycle()
     val unraidCpuUtil by viewModel.unraidCpuUtil.collectAsStateWithLifecycle()
     val unraidMemoryUtil by viewModel.unraidMemoryUtil.collectAsStateWithLifecycle()
@@ -202,7 +203,8 @@ fun MissionControlScreen(
                     unraidNotifications = unraidNotifications,
                     loadingUnraid = loadingUnraid,
                     unraidError = unraidErr,
-                    useDemo = useDemo
+                    useDemo = useDemo,
+                    poolTypes = unraidPoolTypes
                 )
                 "compute" -> ComputeView(
                     resources = pveResources,
@@ -260,7 +262,8 @@ fun DashboardView(
     unraidNotifications: UnraidNotificationOverview?,
     loadingUnraid: Boolean,
     unraidError: String?,
-    useDemo: Boolean
+    useDemo: Boolean,
+    poolTypes: Map<String, String> = emptyMap()
 ) {
     Column(
         modifier = Modifier
@@ -478,7 +481,7 @@ fun DashboardView(
 
                 // Disk List
                 Text(
-                    text = "ARRAY DISKS",
+                    text = "ARRAY DEVICES",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = SecondaryTech,
@@ -494,9 +497,26 @@ fun DashboardView(
                 unraidArray!!.disks.forEach { disk ->
                     ArrayDiskRow(disk = disk)
                 }
-                // Cache disks
-                unraidArray!!.caches.forEach { disk ->
-                    ArrayDiskRow(disk = disk)
+
+                if (unraidArray!!.caches.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        text = "POOL DEVICES",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SecondaryTech,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 1.sp
+                    )
+
+                    // Group caches by their base name (stripping trailing digits)
+                    val groupedPools = unraidArray!!.caches.groupBy { disk ->
+                        disk.name?.replace(Regex("\\d+$"), "") ?: "unknown"
+                    }
+
+                    groupedPools.forEach { (poolName, disks) ->
+                        PoolCard(poolName = poolName, disks = disks, poolTypes = poolTypes)
+                    }
                 }
             }
         } else {
@@ -575,7 +595,7 @@ fun ArrayStatusCard(array: UnraidArray) {
                             fontSize = 15.sp
                         )
                         Text(
-                            text = "${diskCount} Data · ${parityCount} Parity · ${cacheCount} Cache",
+                            text = "${diskCount} Data · ${parityCount} Parity · ${cacheCount} Pool" + if (cacheCount != 1) "s" else "",
                             color = SecondaryTech,
                             fontSize = 11.sp
                         )
@@ -804,13 +824,232 @@ fun NotifCountBadge(count: Int, label: String, color: Color) {
     }
 }
 
+@Composable
+fun PoolCard(poolName: String, disks: List<UnraidArrayDisk>, poolTypes: Map<String, String>) {
+    // Find the disk with filesystem stats
+    val fsDisk = disks.firstOrNull { (it.fsSize ?: 0L) > 0L }
+    val totalSize = fsDisk?.fsSize ?: 0L
+    val usedSize = fsDisk?.fsUsed ?: 0L
+    val usagePercent = if (totalSize > 0L) usedSize.toFloat() / totalSize.toFloat() else 0f
+
+    // Status dot color (Check if all disks are OK)
+    val allOk = disks.all { it.status == "DISK_OK" }
+    val statusColor = if (allOk) TechOk else TechCritical
+
+    // Pool Type Badge Label
+    val primaryDisk = disks.firstOrNull()
+    val typeLabel = when (primaryDisk?.type) {
+        "CACHE" -> {
+            val userType = poolTypes[poolName] ?: poolTypes[poolName.lowercase()]
+            if (userType != null) {
+                userType.replace("_", " ")
+            } else {
+                if (disks.any { it.fsType?.lowercase() == "zfs" }) "ZFS POOL" else "POOL"
+            }
+        }
+        else -> primaryDisk?.type ?: "POOL"
+    }
+
+    val typeColor = PrimaryNeon
+
+    val df = remember { DecimalFormat("#,##0.0") }
+    fun formatKb(kb: Long): String {
+        val tb = kb / 1_000_000_000.0
+        val gb = kb / 1_000_000.0
+        return if (tb >= 1.0) "${df.format(tb)} TB" else "${df.format(gb)} GB"
+    }
+
+    GlassmorphicCard(
+        modifier = Modifier.fillMaxWidth(),
+        borderColor = ThemeCardBorder.copy(alpha = 0.5f),
+        fillColor = ThemeCardFill
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Header: Name + Badge + State
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .background(statusColor, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(typeColor.copy(alpha = 0.12f))
+                            .padding(horizontal = 6.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = typeLabel,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = typeColor,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = poolName,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+
+                Text(
+                    text = "${disks.size} disk" + if (disks.size > 1) "s" else "",
+                    color = SecondaryTech,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            // Pool capacity progress bar (if available)
+            if (totalSize > 0L) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    LinearProgressIndicator(
+                        progress = { usagePercent },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(50.dp)),
+                        color = if (usagePercent > 0.85f) TechCritical else if (usagePercent > 0.7f) TechWarning else PrimaryNeon,
+                        trackColor = ThemeCardBorder
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "${formatKb(usedSize)} / ${formatKb(totalSize)}",
+                            color = SecondaryTech,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = "${(usagePercent * 100).toInt()}% Allocated",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            } else {
+                val sumSize = disks.sumOf { it.size ?: 0L }
+                if (sumSize > 0L) {
+                    Text(
+                        text = "Total Size: ${formatKb(sumSize)} (No filesystem reported)",
+                        color = SecondaryTech,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+
+            // Divider
+            HorizontalDivider(
+                modifier = Modifier.fillMaxWidth(),
+                thickness = 1.dp,
+                color = ThemeCardBorder.copy(alpha = 0.4f)
+            )
+
+            // Inner disks list
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                disks.forEach { disk ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(5.dp)
+                                    .background(
+                                        if (disk.status == "DISK_OK") TechOk else TechCritical,
+                                        CircleShape
+                                    )
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = disk.name ?: "disk${disk.idx}",
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "(${disk.device ?: "—"})",
+                                color = SecondaryTech,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Temperature
+                            disk.temp?.let {
+                                Text(
+                                    text = "${it}°C",
+                                    color = if (it > 45) TechWarning else SecondaryTech,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            // Spin state
+                            if (disk.isSpinning != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(5.dp)
+                                        .background(
+                                            if (disk.isSpinning == true) TechOk else TechMuted,
+                                            CircleShape
+                                        )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ============================================================================
 // DASHBOARD — Array Disk Row
 // ============================================================================
 @Composable
-fun ArrayDiskRow(disk: UnraidArrayDisk) {
+fun ArrayDiskRow(disk: UnraidArrayDisk, poolTypes: Map<String, String> = emptyMap()) {
     val statusOk = disk.status == "DISK_OK"
     val statusColor = if (statusOk) TechOk else if (disk.status == "DISK_NP") TechMuted else TechCritical
+
+    val typeLabel = when (disk.type) {
+        "CACHE" -> {
+            val userType = poolTypes[disk.name]
+            if (userType != null) {
+                userType.replace("_", " ")
+            } else {
+                if (disk.fsType?.lowercase() == "zfs") "ZFS POOL" else "POOL"
+            }
+        }
+        else -> disk.type
+    }
 
     val typeColor = when (disk.type) {
         "PARITY" -> AccentPulse
@@ -864,7 +1103,7 @@ fun ArrayDiskRow(disk: UnraidArrayDisk) {
                             .padding(horizontal = 6.dp, vertical = 1.dp)
                     ) {
                         Text(
-                            text = disk.type,
+                            text = typeLabel,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                             color = typeColor,
@@ -2072,6 +2311,15 @@ fun SettingsView(
 
     var useDemo by remember { mutableStateOf(initialUseDemo) }
 
+    val unraidArray by viewModel.unraidArray.collectAsStateWithLifecycle()
+    val poolTypes by viewModel.unraidPoolTypes.collectAsStateWithLifecycle()
+
+    val poolNames = remember(unraidArray) {
+        unraidArray?.caches?.mapNotNull { disk ->
+            disk.name?.replace(Regex("\\d+$"), "")
+        }?.distinct() ?: emptyList()
+    }
+
     val scope = rememberCoroutineScope()
 
     Column(
@@ -2230,6 +2478,89 @@ fun SettingsView(
                     ),
                     modifier = Modifier.fillMaxWidth().testTag("setting_unraid_token")
                 )
+            }
+        }
+
+        // Pools configuration card
+        if (poolNames.isNotEmpty()) {
+            Text(
+                text = "UNRAID POOLS CONFIGURATION",
+                fontSize = 10.sp,
+                color = SecondaryTech,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+            )
+
+            GlassmorphicCard(
+                modifier = Modifier.fillMaxWidth(),
+                borderColor = ThemeCardBorder,
+                fillColor = ThemeCardFill
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    poolNames.forEach { poolName ->
+                        var expanded by remember { mutableStateOf(false) }
+                        val currentType = poolTypes[poolName] ?: "AUTO"
+                        val options = listOf(
+                            "AUTO" to "Auto-Detect",
+                            "CACHE" to "Standard Cache",
+                            "ZFS_RAIDZ1" to "ZFS (RAIDZ1)",
+                            "ZFS_RAIDZ2" to "ZFS (RAIDZ2)",
+                            "ZFS_RAIDZ3" to "ZFS (RAIDZ3)",
+                            "ZFS_MIRROR" to "ZFS (Mirror)",
+                            "ZFS_STRIPE" to "ZFS (Stripe)",
+                            "ZFS_SINGLE" to "ZFS (Single)"
+                        )
+                        val displayValue = options.find { it.first == currentType }?.second ?: currentType
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = poolName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text(text = "Assign pool role and RAID type", color = SecondaryTech, fontSize = 10.sp)
+                            }
+
+                            Box {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(ThemeCardBorder)
+                                        .clickable { expanded = true }
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(text = displayValue, color = PrimaryNeon, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = PrimaryNeon, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+
+                                DropdownMenu(
+                                    expanded = expanded,
+                                    onDismissRequest = { expanded = false },
+                                    modifier = Modifier.background(ThemeCardFill).border(1.dp, ThemeCardBorder, RoundedCornerShape(6.dp))
+                                ) {
+                                    options.forEach { (typeKey, typeLabel) ->
+                                        DropdownMenuItem(
+                                            text = { Text(typeLabel, color = Color.White, fontSize = 12.sp) },
+                                            onClick = {
+                                                viewModel.savePoolType(poolName, if (typeKey == "AUTO") "" else typeKey)
+                                                expanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 

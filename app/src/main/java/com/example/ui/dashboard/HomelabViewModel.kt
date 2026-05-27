@@ -48,6 +48,36 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
     
     val useDemoMode = MutableStateFlow(sharedPrefs.getBoolean("demo_mode", true))
 
+    val unraidPoolTypes = MutableStateFlow<Map<String, String>>(emptyMap())
+
+    init {
+        unraidPoolTypes.value = loadPoolTypes()
+    }
+
+    private fun loadPoolTypes(): Map<String, String> {
+        val serialized = sharedPrefs.getString("unraid_pool_types", null) ?: return emptyMap()
+        return try {
+            serialized.split(",").filter { it.contains(":") }.associate {
+                val parts = it.split(":")
+                parts[0] to parts[1]
+            }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    fun savePoolType(poolName: String, poolType: String) {
+        val current = unraidPoolTypes.value.toMutableMap()
+        if (poolType.isEmpty()) {
+            current.remove(poolName)
+        } else {
+            current[poolName] = poolType
+        }
+        unraidPoolTypes.value = current
+        val serialized = current.entries.joinToString(",") { "${it.key}:${it.value}" }
+        sharedPrefs.edit().putString("unraid_pool_types", serialized).apply()
+    }
+
     // OkHttp & Moshi for Clean Architecture network repos
     private val okHttpClient: OkHttpClient = try {
         val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
