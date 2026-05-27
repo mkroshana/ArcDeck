@@ -26,12 +26,7 @@ A homelab mission control dashboard for Android. Monitor and manage your self-ho
    signingConfig = signingConfigs.getByName("debugConfig")
    ```
 
-3. Create a `.env` file in the project root (see [.env.example](.env.example)):
-   ```
-   GEMINI_API_KEY=your_api_key_here
-   ```
-
-4. Run on an emulator or physical device.
+3. Run on an emulator or physical device.
 
 ## Configuration
 
