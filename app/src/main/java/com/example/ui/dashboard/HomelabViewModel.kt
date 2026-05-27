@@ -75,16 +75,37 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
     private val unraidRepository = UnraidRepository(UnraidGraphQLClient(okHttpClient, moshi))
     private val arrRepository = ArrRepository(okHttpClient)
 
-    // API UI States
+    // API UI States — Proxmox
     private val _proxmoxResources = MutableStateFlow<List<ProxmoxResource>>(emptyList())
     val proxmoxResources = _proxmoxResources.asStateFlow()
 
-    private val _unraidPools = MutableStateFlow<List<UnraidPoolInfo>>(emptyList())
-    val unraidPools = _unraidPools.asStateFlow()
+    // API UI States — Unraid (real schema)
+    private val _unraidArray = MutableStateFlow<UnraidArray?>(null)
+    val unraidArray = _unraidArray.asStateFlow()
 
+    private val _unraidSystemInfo = MutableStateFlow<UnraidInfo?>(null)
+    val unraidSystemInfo = _unraidSystemInfo.asStateFlow()
+
+    private val _unraidCpuUtil = MutableStateFlow<UnraidCpuUtilization?>(null)
+    val unraidCpuUtil = _unraidCpuUtil.asStateFlow()
+
+    private val _unraidMemoryUtil = MutableStateFlow<UnraidMemoryUtilization?>(null)
+    val unraidMemoryUtil = _unraidMemoryUtil.asStateFlow()
+
+    private val _unraidDockerContainers = MutableStateFlow<List<UnraidDockerContainer>>(emptyList())
+    val unraidDockerContainers = _unraidDockerContainers.asStateFlow()
+
+    private val _unraidVms = MutableStateFlow<List<UnraidVmDomain>>(emptyList())
+    val unraidVms = _unraidVms.asStateFlow()
+
+    private val _unraidNotifications = MutableStateFlow<UnraidNotificationOverview?>(null)
+    val unraidNotifications = _unraidNotifications.asStateFlow()
+
+    // API UI States — Arr
     private val _arrQueue = MutableStateFlow<List<ArrQueueItem>>(emptyList())
     val arrQueue = _arrQueue.asStateFlow()
 
+    // Loading states
     private val _isLoadingProxmox = MutableStateFlow(false)
     val isLoadingProxmox = _isLoadingProxmox.asStateFlow()
 
@@ -94,6 +115,7 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
     private val _isLoadingArr = MutableStateFlow(false)
     val isLoadingArr = _isLoadingArr.asStateFlow()
 
+    // Error states
     private val _proxmoxError = MutableStateFlow<String?>(null)
     val proxmoxError = _proxmoxError.asStateFlow()
 
@@ -195,22 +217,33 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
     private fun calculateAggregateMetrics() {
         // Calculate Dynamic Metrics from Proxmox and Unraid
         val pmList = _proxmoxResources.value
-        val pools = _unraidPools.value
+        val array = _unraidArray.value
+        val cpuUtil = _unraidCpuUtil.value
+        val memUtil = _unraidMemoryUtil.value
 
-        if (pmList.isNotEmpty()) {
+        // RAM: prefer Unraid memory utilization, fallback to Proxmox VM aggregate
+        if (memUtil != null && memUtil.total > 0) {
+            _currentRam.value = memUtil.percentTotal.toInt().coerceIn(5, 99)
+        } else if (pmList.isNotEmpty()) {
             val totalRam = pmList.sumOf { it.maxMemory }
             val usedRam = pmList.sumOf { it.memoryUsed }
             if (totalRam > 0) {
                 _currentRam.value = ((usedRam.toDouble() / totalRam.toDouble()) * 100).toInt().coerceIn(10, 99)
             }
         }
-        
-        if (pools.isNotEmpty()) {
-            val totalSize = pools.sumOf { it.sizeBytes }
-            val totalFree = pools.sumOf { it.freeBytes }
-            if (totalSize > 0) {
-                val used = totalSize - totalFree
-                _currentStorage.value = ((used.toDouble() / totalSize.toDouble()) * 100).toInt().coerceIn(10, 99)
+
+        // CPU: prefer Unraid CPU utilization
+        if (cpuUtil != null) {
+            _currentCpu.value = cpuUtil.percentTotal.toInt().coerceIn(1, 99)
+        }
+
+        // Storage: derive from array capacity (kilobytes)
+        if (array?.capacity?.kilobytes != null) {
+            val cap = array.capacity!!.kilobytes!!
+            val totalKb = cap.total.toLongOrNull() ?: 0L
+            val usedKb = cap.used.toLongOrNull() ?: 0L
+            if (totalKb > 0) {
+                _currentStorage.value = ((usedKb.toDouble() / totalKb.toDouble()) * 100).toInt().coerceIn(1, 99)
             }
         }
     }
@@ -237,18 +270,39 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
     suspend fun refreshUnraid() {
         _isLoadingUnraid.value = true
         _unraidError.value = null
-        val result = unraidRepository.getStoragePools(
-            endpointUrl = unraidUrl.value,
-            authToken = unraidToken.value,
-            useDemoFallback = useDemoMode.value
-        )
-        result.onSuccess {
-            _unraidPools.value = it
+        val url = unraidUrl.value
+        val token = unraidToken.value
+        val demo = useDemoMode.value
+
+        try {
+            // Fetch all Unraid data in parallel-like sequence
+            val arrayResult = unraidRepository.getArrayOverview(url, token, demo)
+            arrayResult.onSuccess { _unraidArray.value = it }
+                .onFailure { throw it }
+
+            val sysResult = unraidRepository.getSystemInfo(url, token, demo)
+            sysResult.onSuccess { _unraidSystemInfo.value = it }
+
+            val utilResult = unraidRepository.getCpuAndMemoryUtilization(url, token, demo)
+            utilResult.onSuccess { (cpu, mem) ->
+                _unraidCpuUtil.value = cpu
+                _unraidMemoryUtil.value = mem
+            }
+
+            val dockerResult = unraidRepository.getDockerContainers(url, token, demo)
+            dockerResult.onSuccess { _unraidDockerContainers.value = it }
+
+            val vmResult = unraidRepository.getVMs(url, token, demo)
+            vmResult.onSuccess { _unraidVms.value = it }
+
+            val notifResult = unraidRepository.getNotificationOverview(url, token, demo)
+            notifResult.onSuccess { _unraidNotifications.value = it }
+
             _isLoadingUnraid.value = false
-        }.onFailure {
-            _unraidError.value = it.localizedMessage ?: "GraphQL Query Failure"
+        } catch (e: Exception) {
+            _unraidError.value = e.localizedMessage ?: "GraphQL Query Failure"
             _isLoadingUnraid.value = false
-            repository.insertTerminalLog(TerminalLog(timestamp = System.currentTimeMillis(), level = "ERROR", source = "UNRAID", message = "Unraid GraphQL Error: ${it.message}"))
+            repository.insertTerminalLog(TerminalLog(timestamp = System.currentTimeMillis(), level = "ERROR", source = "UNRAID", message = "Unraid GraphQL Error: ${e.message}"))
         }
     }
 
@@ -371,20 +425,23 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
             while (true) {
                 delay(3000)
                 val randCpu = Random.nextInt(15, 60)
-                _currentCpu.value = randCpu
+                // Only override CPU with random if we don't have real/demo utilization yet
+                if (_unraidCpuUtil.value == null) {
+                    _currentCpu.value = randCpu
+                }
 
                 val down = 1.0 + Random.nextDouble(1.0, 150.0)
                 val up = 0.5 + Random.nextDouble(0.1, 15.0)
                 _netDown.value = String.format(java.util.Locale.US, "%.1f", down).toDouble()
                 _netUp.value = String.format(java.util.Locale.US, "%.1f", up).toDouble()
 
-                // If in demo mode and list is empty, keep simulating pools/vms
+                // If in demo mode and data is empty, trigger initial load
                 if (useDemoMode.value) {
                     if (_proxmoxResources.value.isEmpty()) {
                         _proxmoxResources.value = proxmoxRepository.getResources("", "", "", true).getOrDefault(emptyList())
                     }
-                    if (_unraidPools.value.isEmpty()) {
-                        _unraidPools.value = unraidRepository.getStoragePools("", "", true).getOrDefault(emptyList())
+                    if (_unraidArray.value == null) {
+                        refreshUnraid()
                     }
                     if (_arrQueue.value.isEmpty()) {
                         _arrQueue.value = arrRepository.getActiveQueue("", "", true).getOrDefault(emptyList())

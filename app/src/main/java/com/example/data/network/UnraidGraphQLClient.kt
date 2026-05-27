@@ -34,7 +34,13 @@ class UnraidGraphQLClient(
             .post(jsonPayload.toRequestBody(mediaType))
             
         if (!authToken.isNullOrEmpty()) {
-            requestBuilder.header("Authorization", "Bearer $authToken")
+            // Support both Bearer token and API key auth
+            if (authToken.startsWith("Bearer ", ignoreCase = true)) {
+                requestBuilder.header("Authorization", authToken)
+            } else {
+                requestBuilder.header("Authorization", "Bearer $authToken")
+                requestBuilder.header("x-api-key", authToken)
+            }
         }
 
         val request = requestBuilder.build()

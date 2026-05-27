@@ -44,23 +44,10 @@ data class HomeAssistantAttributes(
 )
 
 
-/**
- * Unraid API Status Response Placeholders
- * Represents main server arrays, parities, and array drive telemetry
- */
-@JsonClass(generateAdapter = true)
-data class UnraidArrayResponse(
-    @Json(name = "status") val arrayStatus: String, // "STARTED", "STOPPED", "PARITY_CHECKING"
-    @Json(name = "dirty") val isParitySecured: Boolean,
-    @Json(name = "disks") val disks: List<UnraidDiskInfo>
-)
+// ============================================================================
+// UNRAID API PLACEHOLDER MODELS
+// ============================================================================
+// Real Unraid GraphQL models are defined in HomelabNetworkModels.kt.
+// This section is intentionally left empty — demo data is generated
+// directly in UnraidRepository.kt using the real model classes.
 
-@JsonClass(generateAdapter = true)
-data class UnraidDiskInfo(
-    @Json(name = "id") val diskId: Int,
-    @Json(name = "name") val name: String, // e.g., "disk1", "parity"
-    @Json(name = "status") val status: String, // "ACTIVE", "SPUN_DOWN"
-    @Json(name = "temp") val temperatureCelsius: Double,
-    @Json(name = "size") val sizeBytes: Long,
-    @Json(name = "free") val freeBytes: Long
-)

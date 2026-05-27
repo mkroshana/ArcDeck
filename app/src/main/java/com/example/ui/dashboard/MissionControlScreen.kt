@@ -33,9 +33,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.data.model.ArrQueueItem
-import com.example.data.model.ProxmoxResource
-import com.example.data.model.UnraidPoolInfo
+import com.example.data.model.*
 import com.example.ui.components.CircularMetricRing
 import com.example.ui.components.GlassmorphicCard
 import com.example.ui.theme.*
@@ -64,8 +62,16 @@ fun MissionControlScreen(
 
     // api list values
     val pveResources by viewModel.proxmoxResources.collectAsStateWithLifecycle()
-    val unPools by viewModel.unraidPools.collectAsStateWithLifecycle()
     val arrItems by viewModel.arrQueue.collectAsStateWithLifecycle()
+
+    // Unraid state flows
+    val unraidArray by viewModel.unraidArray.collectAsStateWithLifecycle()
+    val unraidSystemInfo by viewModel.unraidSystemInfo.collectAsStateWithLifecycle()
+    val unraidCpuUtil by viewModel.unraidCpuUtil.collectAsStateWithLifecycle()
+    val unraidMemoryUtil by viewModel.unraidMemoryUtil.collectAsStateWithLifecycle()
+    val unraidDockerContainers by viewModel.unraidDockerContainers.collectAsStateWithLifecycle()
+    val unraidVms by viewModel.unraidVms.collectAsStateWithLifecycle()
+    val unraidNotifications by viewModel.unraidNotifications.collectAsStateWithLifecycle()
 
     // loadings
     val loadingPve by viewModel.isLoadingProxmox.collectAsStateWithLifecycle()
@@ -143,6 +149,7 @@ fun MissionControlScreen(
                 val menuItems = listOf(
                     Triple("home", Icons.Default.Home, "Dashboard"),
                     Triple("compute", Icons.Default.Settings, "Compute"),
+                    Triple("unraid", Icons.Default.Star, "Unraid"),
                     Triple("media", Icons.Default.PlayArrow, "Media Queue"),
                     Triple("settings", Icons.Default.Build, "Settings")
                 )
@@ -152,7 +159,7 @@ fun MissionControlScreen(
                         selected = selectedTab == tabId,
                         onClick = { selectedTab = tabId },
                         icon = { Icon(imageVector = icon, contentDescription = label) },
-                        label = { Text(label, fontSize = 11.sp, fontWeight = FontWeight.Medium) },
+                        label = { Text(label, fontSize = 10.sp, fontWeight = FontWeight.Medium) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = PrimaryNeon,
                             unselectedIconColor = SecondaryTech,
@@ -178,7 +185,8 @@ fun MissionControlScreen(
                     storage = storageVal,
                     netDown = netDown,
                     netUp = netUp,
-                    unraidPools = unPools,
+                    unraidArray = unraidArray,
+                    unraidNotifications = unraidNotifications,
                     loadingUnraid = loadingUnraid,
                     unraidError = unraidErr,
                     useDemo = useDemo
@@ -191,6 +199,16 @@ fun MissionControlScreen(
                     onPowerAction = { resource, action ->
                         viewModel.executeProxmoxPowerAction(resource, action)
                     },
+                    useDemo = useDemo
+                )
+                "unraid" -> UnraidDetailView(
+                    systemInfo = unraidSystemInfo,
+                    cpuUtil = unraidCpuUtil,
+                    memoryUtil = unraidMemoryUtil,
+                    dockerContainers = unraidDockerContainers,
+                    vms = unraidVms,
+                    isLoading = loadingUnraid,
+                    error = unraidErr,
                     useDemo = useDemo
                 )
                 "media" -> MediaQueueView(
@@ -216,7 +234,7 @@ fun MissionControlScreen(
 }
 
 // ============================================================================
-// 1. DASHBOARD VIEW (overview of translucent glassmorphism cards)
+// 1. DASHBOARD VIEW (overview with real Unraid array data)
 // ============================================================================
 @Composable
 fun DashboardView(
@@ -225,7 +243,8 @@ fun DashboardView(
     storage: Int,
     netDown: Double,
     netUp: Double,
-    unraidPools: List<UnraidPoolInfo>,
+    unraidArray: UnraidArray?,
+    unraidNotifications: UnraidNotificationOverview?,
     loadingUnraid: Boolean,
     unraidError: String?,
     useDemo: Boolean
@@ -361,9 +380,11 @@ fun DashboardView(
             }
         }
 
-        // Unraid storage array pools overview sub-section
+        // ==================================================================
+        // UNRAID ARRAY STATUS (real schema)
+        // ==================================================================
         Text(
-            text = "STORAGE ARRAY POOLS (UNRAID)",
+            text = "UNRAID ARRAY STATUS",
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             color = AccentPulse,
@@ -396,35 +417,194 @@ fun DashboardView(
                     Text(text = "Unraid connection failed: $unraidError", color = Color.White, fontSize = 12.sp)
                 }
             }
-        } else {
+        } else if (unraidArray != null) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                unraidPools.forEach { pool ->
-                    StoragePoolItemCard(pool = pool)
+                // Array State & Capacity Card
+                ArrayStatusCard(array = unraidArray!!)
+
+                // Parity Check Card
+                unraidArray!!.parityCheckStatus?.let { parity ->
+                    ParityCheckCard(parity = parity)
                 }
-                if (unraidPools.isEmpty()) {
-                    Text(
-                        text = "No storage pool records registered.",
-                        color = SecondaryTech,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
+
+                // Notification Badge
+                unraidNotifications?.let { notifs ->
+                    if (notifs.unread.total > 0) {
+                        NotificationBadgeCard(overview = notifs)
+                    }
+                }
+
+                // Disk List
+                Text(
+                    text = "ARRAY DISKS",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SecondaryTech,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.sp
+                )
+
+                // Parity disks
+                unraidArray!!.parities.forEach { disk ->
+                    ArrayDiskRow(disk = disk)
+                }
+                // Data disks
+                unraidArray!!.disks.forEach { disk ->
+                    ArrayDiskRow(disk = disk)
+                }
+                // Cache disks
+                unraidArray!!.caches.forEach { disk ->
+                    ArrayDiskRow(disk = disk)
                 }
             }
+        } else {
+            Text(
+                text = "No array data available.",
+                color = SecondaryTech,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
         }
 
         Spacer(modifier = Modifier.height(30.dp))
     }
 }
 
+
+// ============================================================================
+// DASHBOARD — Array Status Card
+// ============================================================================
 @Composable
-fun StoragePoolItemCard(pool: UnraidPoolInfo) {
-    val totalGb = pool.sizeBytes / 1_000_000_000.0
-    val freeGb = pool.freeBytes / 1_000_000_000.0
-    val usedGb = totalGb - freeGb
+fun ArrayStatusCard(array: UnraidArray) {
+    val stateColor = when (array.state) {
+        "STARTED" -> TechOk
+        "STOPPED" -> TechCritical
+        else -> TechWarning
+    }
+
+    val cap = array.capacity?.kilobytes
+    val totalKb = cap?.total?.toLongOrNull() ?: 0L
+    val usedKb = cap?.used?.toLongOrNull() ?: 0L
+    val freeKb = cap?.free?.toLongOrNull() ?: 0L
+    val usagePercent = if (totalKb > 0) (usedKb.toFloat() / totalKb.toFloat()) else 0f
 
     val df = remember { DecimalFormat("#,##0.0") }
-    val totalStr = if (totalGb >= 1000.0) "${df.format(totalGb / 1000.0)} TB" else "${df.format(totalGb)} GB"
-    val usedStr = if (usedGb >= 1000.0) "${df.format(usedGb / 1000.0)} TB" else "${df.format(usedGb)} GB"
+    fun formatKb(kb: Long): String {
+        val tb = kb / 1_000_000_000.0
+        val gb = kb / 1_000_000.0
+        return if (tb >= 1.0) "${df.format(tb)} TB" else "${df.format(gb)} GB"
+    }
+
+    val diskCount = array.disks.size
+    val parityCount = array.parities.size
+    val cacheCount = array.caches.size
+
+    GlassmorphicCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("array_status_card"),
+        borderColor = stateColor.copy(alpha = 0.3f),
+        fillColor = ThemeCardFill
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Header: State + Disk summary
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .background(stateColor, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Array ${array.state.replace("_", " ")}",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                        Text(
+                            text = "${diskCount} Data · ${parityCount} Parity · ${cacheCount} Cache",
+                            color = SecondaryTech,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50.dp))
+                        .background(stateColor.copy(alpha = 0.15f))
+                        .padding(horizontal = 10.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = array.state,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = stateColor,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+
+            // Capacity progress bar
+            if (totalKb > 0) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    LinearProgressIndicator(
+                        progress = { usagePercent },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(50.dp)),
+                        color = if (usagePercent > 0.85f) TechCritical else PrimaryNeon,
+                        trackColor = ThemeCardBorder
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Used: ${formatKb(usedKb)} of ${formatKb(totalKb)}",
+                            color = SecondaryTech,
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            text = "${(usagePercent * 100).toInt()}% Allocated",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// DASHBOARD — Parity Check Card
+// ============================================================================
+@Composable
+fun ParityCheckCard(parity: UnraidParityCheck) {
+    val isRunning = parity.running == true
+    val statusColor = when (parity.status) {
+        "COMPLETED" -> TechOk
+        "RUNNING" -> PrimaryNeon
+        "PAUSED" -> TechWarning
+        "FAILED" -> TechCritical
+        "CANCELLED" -> TechMuted
+        else -> SecondaryTech
+    }
 
     GlassmorphicCard(
         modifier = Modifier.fillMaxWidth(),
@@ -435,7 +615,7 @@ fun StoragePoolItemCard(pool: UnraidPoolInfo) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -443,63 +623,287 @@ fun StoragePoolItemCard(pool: UnraidPoolInfo) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(if (pool.status == "ONLINE") TechOk else TechWarning, CircleShape)
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Parity",
+                        tint = statusColor,
+                        modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = pool.name,
+                        text = "PARITY CHECK",
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace
                     )
                 }
-
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(50.dp))
-                        .background(if (pool.status == "ONLINE") TechOk.copy(alpha = 0.15f) else TechWarning.copy(alpha = 0.15f))
+                        .background(statusColor.copy(alpha = 0.15f))
                         .padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = pool.status,
-                        fontSize = 10.sp,
+                        text = parity.status.replace("_", " "),
+                        fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (pool.status == "ONLINE") TechOk else TechWarning
+                        color = statusColor
                     )
                 }
             }
 
-            // Line usage metrics progress bar
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Progress bar if running
+            if (isRunning && parity.progress != null) {
                 LinearProgressIndicator(
-                    progress = { pool.usagePercent / 100f },
+                    progress = { parity.progress / 100f },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(6.dp)
+                        .height(4.dp)
                         .clip(RoundedCornerShape(50.dp)),
-                    color = if (pool.usagePercent > 85f) TechCritical else PrimaryNeon,
+                    color = PrimaryNeon,
                     trackColor = ThemeCardBorder
                 )
+                Text(
+                    text = "${parity.progress}% complete · ${parity.speed ?: "—"} MB/s",
+                    color = SecondaryTech,
+                    fontSize = 11.sp
+                )
+            }
 
+            // Completed info
+            if (parity.status == "COMPLETED") {
+                val durationHrs = (parity.duration ?: 0) / 3600.0
+                val df = remember { DecimalFormat("#,##0.1") }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Used: $usedStr of $totalStr",
+                        text = "Duration: ${df.format(durationHrs)} hrs",
                         color = SecondaryTech,
                         fontSize = 11.sp
                     )
                     Text(
-                        text = "${pool.usagePercent.toInt()}% Allocated",
-                        color = Color.White.copy(alpha = 0.7f),
+                        text = "Errors: ${parity.errors ?: 0}",
+                        color = if ((parity.errors ?: 0) > 0) TechCritical else TechOk,
                         fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// DASHBOARD — Notification Badge Card
+// ============================================================================
+@Composable
+fun NotificationBadgeCard(overview: UnraidNotificationOverview) {
+    GlassmorphicCard(
+        modifier = Modifier.fillMaxWidth(),
+        borderColor = ThemeCardBorder,
+        fillColor = ThemeCardFill
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Notifications,
+                    contentDescription = "Notifications",
+                    tint = if (overview.unread.alert > 0) TechCritical else TechWarning,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "UNREAD NOTIFICATIONS",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (overview.unread.alert > 0) {
+                    NotifCountBadge(count = overview.unread.alert, label = "Alert", color = TechCritical)
+                }
+                if (overview.unread.warning > 0) {
+                    NotifCountBadge(count = overview.unread.warning, label = "Warn", color = TechWarning)
+                }
+                if (overview.unread.info > 0) {
+                    NotifCountBadge(count = overview.unread.info, label = "Info", color = PrimaryNeon)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun NotifCountBadge(count: Int, label: String, color: Color) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50.dp))
+            .background(color.copy(alpha = 0.15f))
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+    ) {
+        Text(
+            text = "$count $label",
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = color
+        )
+    }
+}
+
+// ============================================================================
+// DASHBOARD — Array Disk Row
+// ============================================================================
+@Composable
+fun ArrayDiskRow(disk: UnraidArrayDisk) {
+    val statusOk = disk.status == "DISK_OK"
+    val statusColor = if (statusOk) TechOk else if (disk.status == "DISK_NP") TechMuted else TechCritical
+
+    val typeColor = when (disk.type) {
+        "PARITY" -> AccentPulse
+        "CACHE" -> PrimaryNeon
+        "DATA" -> TechOk
+        "FLASH" -> TechWarning
+        else -> SecondaryTech
+    }
+
+    val df = remember { DecimalFormat("#,##0.0") }
+    fun formatKb(kb: Long?): String {
+        if (kb == null || kb == 0L) return "—"
+        val tb = kb / 1_000_000_000.0
+        val gb = kb / 1_000_000.0
+        return if (tb >= 1.0) "${df.format(tb)} TB" else "${df.format(gb)} GB"
+    }
+
+    val usagePercent = if ((disk.fsSize ?: 0L) > 0L) {
+        (disk.fsUsed ?: 0L).toFloat() / disk.fsSize!!.toFloat()
+    } else 0f
+
+    GlassmorphicCard(
+        modifier = Modifier.fillMaxWidth(),
+        borderColor = ThemeCardBorder.copy(alpha = 0.5f),
+        fillColor = ThemeCardFill
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Status dot
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .background(statusColor, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    // Type badge
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(typeColor.copy(alpha = 0.12f))
+                            .padding(horizontal = 6.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = disk.type,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = typeColor,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = disk.name ?: "disk${disk.idx}",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    )
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // Temperature
+                    disk.temp?.let {
+                        Text(
+                            text = "${it}°C",
+                            color = if (it > 45) TechWarning else SecondaryTech,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    // Spin indicator
+                    if (disk.isSpinning != null) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(
+                                    if (disk.isSpinning == true) TechOk else TechMuted,
+                                    CircleShape
+                                )
+                        )
+                    }
+                }
+            }
+
+            // Capacity bar (only for data/cache disks with filesystem)
+            if ((disk.fsSize ?: 0L) > 0L) {
+                LinearProgressIndicator(
+                    progress = { usagePercent },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(50.dp)),
+                    color = if (usagePercent > 0.85f) TechCritical else if (usagePercent > 0.7f) TechWarning else PrimaryNeon,
+                    trackColor = ThemeCardBorder
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "${formatKb(disk.fsUsed)} / ${formatKb(disk.fsSize)}",
+                        color = SecondaryTech,
+                        fontSize = 10.sp
+                    )
+                    Text(
+                        text = "Errors: ${disk.numErrors ?: 0}",
+                        color = if ((disk.numErrors ?: 0) > 0) TechCritical else SecondaryTech,
+                        fontSize = 10.sp
+                    )
+                }
+            } else {
+                // Parity disks — show total size and errors
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Size: ${formatKb(disk.size)}",
+                        color = SecondaryTech,
+                        fontSize = 10.sp
+                    )
+                    Text(
+                        text = "Errors: ${disk.numErrors ?: 0}",
+                        color = if ((disk.numErrors ?: 0) > 0) TechCritical else SecondaryTech,
+                        fontSize = 10.sp
                     )
                 }
             }
@@ -844,6 +1248,457 @@ fun ResourceItemCard(
                             fontWeight = FontWeight.Bold
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+
+// ============================================================================
+// 2.5 UNRAID DETAIL VIEW (new tab)
+// ============================================================================
+@Composable
+fun UnraidDetailView(
+    systemInfo: UnraidInfo?,
+    cpuUtil: UnraidCpuUtilization?,
+    memoryUtil: UnraidMemoryUtilization?,
+    dockerContainers: List<UnraidDockerContainer>,
+    vms: List<UnraidVmDomain>,
+    isLoading: Boolean,
+    error: String?,
+    useDemo: Boolean
+) {
+    if (isLoading) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = PrimaryNeon)
+        }
+        return
+    }
+
+    if (error != null && !useDemo) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.Warning, contentDescription = "Error", tint = TechCritical, modifier = Modifier.size(32.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(text = "Unraid API connection failed.", color = Color.White, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(text = error, color = SecondaryTech, fontSize = 12.sp)
+            }
+        }
+        return
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // ---- System Info Card ----
+        Text(
+            text = "SYSTEM INFORMATION",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = AccentPulse,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 1.2.sp
+        )
+
+        if (systemInfo != null) {
+            GlassmorphicCard(
+                modifier = Modifier.fillMaxWidth(),
+                borderColor = ThemeCardBorder,
+                fillColor = ThemeCardFill
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    systemInfo.os?.hostname?.let {
+                        SysInfoRow("Hostname", it)
+                    }
+                    systemInfo.system?.manufacturer?.let { mfg ->
+                        SysInfoRow("Hardware", "${mfg} ${systemInfo.system?.model ?: ""}")
+                    }
+                    systemInfo.cpu?.brand?.let {
+                        SysInfoRow("CPU", it)
+                    }
+                    systemInfo.cpu?.let { cpu ->
+                        SysInfoRow("Cores / Threads", "${cpu.cores ?: "—"} / ${cpu.threads ?: "—"}")
+                    }
+                    systemInfo.versions?.core?.unraid?.let {
+                        SysInfoRow("Unraid Version", it)
+                    }
+                    systemInfo.os?.kernel?.let {
+                        SysInfoRow("Kernel", it)
+                    }
+
+                    // Memory layout summary
+                    if (systemInfo.memory?.layout?.isNotEmpty() == true) {
+                        val totalMem = systemInfo.memory!!.layout.sumOf { it.size }
+                        val memGb = totalMem / 1_073_741_824.0
+                        val df = DecimalFormat("#,##0.0")
+                        val firstSlot = systemInfo.memory!!.layout.first()
+                        SysInfoRow("Memory", "${df.format(memGb)} GB ${firstSlot.type ?: ""} @ ${firstSlot.clockSpeed ?: "—"} MHz")
+                    }
+
+                    // CPU Package Temp
+                    systemInfo.cpu?.packages?.temp?.firstOrNull()?.let { temp ->
+                        SysInfoRow("CPU Temp", "${DecimalFormat("#,##0.0").format(temp)}°C")
+                    }
+                    systemInfo.cpu?.packages?.totalPower?.let { power ->
+                        SysInfoRow("CPU Power", "${DecimalFormat("#,##0.0").format(power)} W")
+                    }
+                }
+            }
+        }
+
+        // ---- CPU & Memory Live Gauges ----
+        Text(
+            text = "LIVE UTILIZATION",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = AccentPulse,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 1.2.sp
+        )
+
+        GlassmorphicCard(
+            modifier = Modifier.fillMaxWidth(),
+            borderColor = ThemeCardBorder.copy(alpha = 0.6f),
+            fillColor = ThemeCardFill
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    CircularMetricRing(
+                        percentage = (cpuUtil?.percentTotal?.toFloat() ?: 0f),
+                        title = "CPU Load",
+                        accentColor = PrimaryNeon
+                    )
+                    CircularMetricRing(
+                        percentage = (memoryUtil?.percentTotal?.toFloat() ?: 0f),
+                        title = "RAM Usage",
+                        accentColor = AccentPulse
+                    )
+                    CircularMetricRing(
+                        percentage = (memoryUtil?.percentSwapTotal?.toFloat() ?: 0f),
+                        title = "Swap",
+                        accentColor = TechWarning
+                    )
+                }
+
+                // Memory detail row
+                memoryUtil?.let { mem ->
+                    val df = DecimalFormat("#,##0.0")
+                    val usedGb = mem.used / 1_073_741_824.0
+                    val totalGb = mem.total / 1_073_741_824.0
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "RAM: ${df.format(usedGb)} / ${df.format(totalGb)} GB",
+                            color = SecondaryTech,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+        }
+
+        // ---- Docker Containers ----
+        Text(
+            text = "DOCKER CONTAINERS (${dockerContainers.size})",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = AccentPulse,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 1.2.sp
+        )
+
+        if (dockerContainers.isEmpty()) {
+            Text(text = "No Docker containers found.", color = SecondaryTech, fontSize = 12.sp)
+        } else {
+            dockerContainers.forEach { container ->
+                DockerContainerCard(container = container)
+            }
+        }
+
+        // ---- Virtual Machines ----
+        Text(
+            text = "VIRTUAL MACHINES (${vms.size})",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = AccentPulse,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 1.2.sp
+        )
+
+        if (vms.isEmpty()) {
+            Text(text = "No virtual machines found.", color = SecondaryTech, fontSize = 12.sp)
+        } else {
+            vms.forEach { vm ->
+                UnraidVmCard(vm = vm)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(30.dp))
+    }
+}
+
+@Composable
+fun SysInfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            color = SecondaryTech,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Text(
+            text = value,
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace
+        )
+    }
+}
+
+@Composable
+fun DockerContainerCard(container: UnraidDockerContainer) {
+    val isRunning = container.state.lowercase() == "running"
+    val stateColor = when (container.state.lowercase()) {
+        "running" -> TechOk
+        "paused" -> TechWarning
+        else -> TechCritical
+    }
+    val displayName = container.names.firstOrNull()?.removePrefix("/") ?: container.id.take(12)
+
+    GlassmorphicCard(
+        modifier = Modifier.fillMaxWidth(),
+        borderColor = ThemeCardBorder.copy(alpha = 0.5f),
+        fillColor = ThemeCardFill
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(stateColor, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = displayName,
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = container.image,
+                            color = SecondaryTech,
+                            fontSize = 10.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50.dp))
+                            .background(stateColor.copy(alpha = 0.15f))
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = container.state.uppercase(),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = stateColor
+                        )
+                    }
+                    if (container.autoStart) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "AUTO",
+                            fontSize = 8.sp,
+                            color = PrimaryNeon.copy(alpha = 0.7f),
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+
+            // Ports row
+            if (container.ports.isNotEmpty()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    container.ports.take(3).forEach { port ->
+                        val portText = if (port.publicPort != null && port.publicPort != port.privatePort) {
+                            "${port.publicPort}:${port.privatePort}/${port.type ?: "TCP"}"
+                        } else {
+                            "${port.privatePort ?: "—"}/${port.type ?: "TCP"}"
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(ThemeCardBorder)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = portText,
+                                fontSize = 9.sp,
+                                color = SecondaryTech,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                    if (container.ports.size > 3) {
+                        Text(
+                            text = "+${container.ports.size - 3} more",
+                            fontSize = 9.sp,
+                            color = SecondaryTech
+                        )
+                    }
+                }
+            }
+
+            // Status text
+            Text(
+                text = container.status,
+                color = SecondaryTech.copy(alpha = 0.7f),
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+    }
+}
+
+@Composable
+fun UnraidVmCard(vm: UnraidVmDomain) {
+    val isRunning = vm.state.lowercase() == "running"
+    val stateColor = when (vm.state.lowercase()) {
+        "running" -> TechOk
+        "paused" -> TechWarning
+        else -> TechCritical
+    }
+
+    val df = remember { DecimalFormat("#,##0.0") }
+    val memGb = vm.maxMemory / 1_073_741_824.0
+
+    GlassmorphicCard(
+        modifier = Modifier.fillMaxWidth(),
+        borderColor = ThemeCardBorder.copy(alpha = 0.5f),
+        fillColor = ThemeCardFill
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(stateColor.copy(alpha = 0.08f))
+                            .border(1.dp, stateColor.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "VM",
+                            color = stateColor,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = vm.name,
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(stateColor, CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = vm.state.replaceFirstChar { it.uppercase() },
+                                color = stateColor,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "${vm.vcpuCount} vCPU",
+                        color = SecondaryTech,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "${df.format(memGb)} GB RAM",
+                        color = SecondaryTech,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
