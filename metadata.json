@@ -1,0 +1,6 @@
+{
+  "name": "Homelab Dashboard",
+  "description": "A sleek, dark, glassmorphic Homelab Management Dashboard & Command Center to monitor servers, services, and system metrics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
