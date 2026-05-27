@@ -18,13 +18,13 @@ private val DarkColorScheme =
     primary = StaticPrimaryNeon,
     secondary = StaticSecondaryTech,
     tertiary = StaticAccentPulse,
-    background = StaticThemeBackground,
-    surface = StaticThemeBackground,
+    background = Color(0xFF0A0A0C),
+    surface = Color(0xFF0A0A0C),
     onBackground = Color.White,
     onSurface = Color.White,
     primaryContainer = Color(0x1100E5FF),
     secondaryContainer = Color(0x1194A3B8),
-    surfaceContainer = StaticThemeCardFill,
+    surfaceContainer = Color(0xFF1E1E22),
     outlineVariant = StaticThemeCardBorder
   )
 

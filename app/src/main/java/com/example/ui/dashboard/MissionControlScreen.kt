@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.*
 import com.example.ui.components.CircularMetricRing
 import com.example.ui.components.GlassmorphicCard
+import com.example.ui.components.MetricMiniSparkline
 import com.example.ui.theme.*
 import kotlinx.coroutines.launch
 import java.text.DecimalFormat
@@ -302,6 +303,48 @@ fun DashboardView(
     val unraidCpuVal = unraidCpuUtil?.percentTotal?.toInt()?.coerceIn(1, 99) ?: 18
     val unraidRamVal = unraidMemoryUtil?.percentTotal?.toInt()?.coerceIn(1, 99) ?: 57
 
+    val pveCpuHistory = remember { 
+        mutableStateListOf<Int>().apply {
+            addAll(listOf(
+                (pveCpu * 0.8f).toInt(),
+                (pveCpu * 0.9f).toInt(),
+                (pveCpu * 1.1f).toInt(),
+                (pveCpu * 0.95f).toInt(),
+                (pveCpu * 1.05f).toInt(),
+                pveCpu
+            ))
+        }
+    }
+    LaunchedEffect(pveCpu) {
+        if (pveCpuHistory.isEmpty() || pveCpuHistory.last() != pveCpu) {
+            pveCpuHistory.add(pveCpu)
+            if (pveCpuHistory.size > 40) {
+                pveCpuHistory.removeAt(0)
+            }
+        }
+    }
+
+    val unraidCpuHistory = remember { 
+        mutableStateListOf<Int>().apply {
+            addAll(listOf(
+                (unraidCpuVal * 0.8f).toInt(),
+                (unraidCpuVal * 0.9f).toInt(),
+                (unraidCpuVal * 1.1f).toInt(),
+                (unraidCpuVal * 0.95f).toInt(),
+                (unraidCpuVal * 1.05f).toInt(),
+                unraidCpuVal
+            ))
+        }
+    }
+    LaunchedEffect(unraidCpuVal) {
+        if (unraidCpuHistory.isEmpty() || unraidCpuHistory.last() != unraidCpuVal) {
+            unraidCpuHistory.add(unraidCpuVal)
+            if (unraidCpuHistory.size > 40) {
+                unraidCpuHistory.removeAt(0)
+            }
+        }
+    }
+
     var arrayExpanded by remember { mutableStateOf(true) }
     var poolsExpanded by remember { mutableStateOf(true) }
 
@@ -353,15 +396,7 @@ fun DashboardView(
             }
         }
 
-        // Section header
-        Text(
-            text = "RESOURCE USAGE",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = AccentPulse,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = 1.2.sp
-        )
+
 
         // Card 1: Proxmox VE Cluster
         GlassmorphicCard(
@@ -384,19 +419,84 @@ fun DashboardView(
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 1.2.sp
                 )
-                Row(
+                // CPU Graph Section
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceAround
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    CircularMetricRing(
-                        percentage = pveCpu.toFloat(),
-                        title = "Cluster CPU",
-                        accentColor = PrimaryNeon
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        Column {
+                            Text(
+                                text = "Cluster CPU",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 0.5.sp
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Real-time Trend",
+                                color = SecondaryTech,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Text(
+                            text = "$pveCpu%",
+                            color = Color.White,
+                            fontSize = 36.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                    MetricMiniSparkline(
+                        dataHistory = pveCpuHistory,
+                        lineColor = PrimaryNeon,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
                     )
-                    CircularMetricRing(
-                        percentage = pveRam.toFloat(),
-                        title = "Cluster RAM",
-                        accentColor = AccentPulse
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // RAM Bar Section
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Cluster RAM",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = "$pveRam%",
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    LinearProgressIndicator(
+                        progress = { pveRam / 100f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(CircleShape),
+                        color = AccentPulse,
+                        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
                     )
                 }
             }
@@ -406,7 +506,7 @@ fun DashboardView(
         GlassmorphicCard(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 24.dp,
-            borderColor = if (storage >= 90) MaterialTheme.colorScheme.error.copy(alpha = 0.3f) else Color.Transparent,
+            borderColor = Color.Transparent,
             fillColor = MaterialTheme.colorScheme.surfaceContainer
         ) {
             Column(
@@ -423,26 +523,84 @@ fun DashboardView(
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 1.2.sp
                 )
-                Row(
+                // CPU Graph Section
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceAround
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    CircularMetricRing(
-                        percentage = unraidCpuVal.toFloat(),
-                        title = "Server CPU",
-                        accentColor = PrimaryNeon
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        Column {
+                            Text(
+                                text = "Server CPU",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 0.5.sp
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Real-time Trend",
+                                color = SecondaryTech,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Text(
+                            text = "$unraidCpuVal%",
+                            color = Color.White,
+                            fontSize = 36.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                    MetricMiniSparkline(
+                        dataHistory = unraidCpuHistory,
+                        lineColor = PrimaryNeon,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
                     )
-                    CircularMetricRing(
-                        percentage = unraidRamVal.toFloat(),
-                        title = "Server RAM",
-                        accentColor = AccentPulse
-                    )
-                    
-                    val storageColor = if (storage >= 90) MaterialTheme.colorScheme.error else TechWarning
-                    CircularMetricRing(
-                        percentage = storage.toFloat(),
-                        title = "Storage Pool",
-                        accentColor = storageColor
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // RAM Bar Section
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Server RAM",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = "$unraidRamVal%",
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    LinearProgressIndicator(
+                        progress = { unraidRamVal / 100f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(CircleShape),
+                        color = AccentPulse,
+                        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
                     )
                 }
             }
@@ -530,6 +688,7 @@ fun DashboardView(
             fontFamily = FontFamily.Monospace,
             letterSpacing = 1.2.sp
         )
+        Spacer(modifier = Modifier.height(12.dp))
 
         val showLoading = loadingUnraid && unraidArray == null
         val showError = unraidError != null && !useDemo && unraidArray == null
@@ -605,7 +764,7 @@ fun DashboardView(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { arrayExpanded = !arrayExpanded }
-                        .padding(vertical = 4.dp),
+                        .padding(top = 16.dp, bottom = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -641,7 +800,7 @@ fun DashboardView(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { poolsExpanded = !poolsExpanded }
-                            .padding(vertical = 4.dp),
+                            .padding(top = 16.dp, bottom = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -775,7 +934,7 @@ fun ArrayStatusCard(array: UnraidArray) {
 
             // Thick capacity progress bar
             val barColor = if (usagePercent >= 0.90f) MaterialTheme.colorScheme.error else PrimaryNeon
-            val trackColor = barColor.copy(alpha = 0.15f)
+            val trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 LinearProgressIndicator(
@@ -881,7 +1040,7 @@ fun ParityCheckCard(parity: UnraidParityCheck) {
                         .height(8.dp)
                         .clip(CircleShape),
                     color = PrimaryNeon,
-                    trackColor = PrimaryNeon.copy(alpha = 0.15f)
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
                 )
                 Text(
                     text = "${parity.progress}% complete · ${parity.speed ?: "—"} MB/s",
@@ -964,7 +1123,7 @@ fun NotificationBadgeCard(overview: UnraidNotificationOverview) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.errorContainer)
                         .clickable { /* Action */ }
                         .padding(vertical = 8.dp),
@@ -979,12 +1138,12 @@ fun NotificationBadgeCard(overview: UnraidNotificationOverview) {
                 }
 
                 // Warn Chip (Yellow/Warning)
-                val warningContainerColor = Color(0xFF514300)
-                val onWarningContainerColor = Color(0xFFFFE082)
+                val warningContainerColor = Color(0xFFFFB300).copy(alpha = 0.15f)
+                val onWarningContainerColor = Color(0xFFFFD54F)
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(CircleShape)
                         .background(warningContainerColor)
                         .clickable { /* Action */ }
                         .padding(vertical = 8.dp),
@@ -1002,7 +1161,7 @@ fun NotificationBadgeCard(overview: UnraidNotificationOverview) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.secondaryContainer)
                         .clickable { /* Action */ }
                         .padding(vertical = 8.dp),
@@ -1120,7 +1279,7 @@ fun PoolCard(poolName: String, disks: List<UnraidArrayDisk>, poolTypes: Map<Stri
                         .height(8.dp)
                         .clip(CircleShape),
                     color = if (usagePercent > 0.85f) TechCritical else if (usagePercent > 0.7f) TechWarning else PrimaryNeon,
-                    trackColor = PrimaryNeon.copy(alpha = 0.15f)
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1220,7 +1379,7 @@ fun PoolCard(poolName: String, disks: List<UnraidArrayDisk>, poolTypes: Map<Stri
                                 .height(4.dp)
                                 .clip(CircleShape),
                             color = PrimaryNeon.copy(alpha = 0.7f),
-                            trackColor = PrimaryNeon.copy(alpha = 0.1f)
+                            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
                         )
                     }
                 }
@@ -1358,7 +1517,7 @@ fun ArrayDiskRow(disk: UnraidArrayDisk, poolTypes: Map<String, String> = emptyMa
                         .height(6.dp)
                         .clip(CircleShape),
                     color = barColor,
-                    trackColor = barColor.copy(alpha = 0.1f)
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),

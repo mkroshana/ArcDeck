@@ -107,8 +107,8 @@ fun CircularMetricRing(
                     Text(
                         text = "${(animatedProgress.value * 100).toInt()}%",
                         color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 36.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
                         fontFamily = FontFamily.Monospace
                     )
                 }
@@ -135,7 +135,9 @@ fun CircularMetricRing(
 fun MetricMiniSparkline(
     dataHistory: List<Int>,
     lineColor: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    minVal: Float = 0f,
+    maxVal: Float = 100f
 ) {
     if (dataHistory.size < 2) return
 
@@ -143,8 +145,6 @@ fun MetricMiniSparkline(
         val width = size.width
         val height = size.height
 
-        val maxVal = dataHistory.maxOrNull()?.toFloat()?.coerceAtLeast(10f) ?: 100f
-        val minVal = dataHistory.minOrNull()?.toFloat() ?: 0f
         val valRange = (maxVal - minVal).coerceAtLeast(1f)
 
         val points = dataHistory.mapIndexed { idx, value ->
@@ -158,11 +158,7 @@ fun MetricMiniSparkline(
             if (points.isNotEmpty()) {
                 moveTo(points.first().x, points.first().y)
                 for (i in 1 until points.size) {
-                    val pPrev = points[i - 1]
-                    val pCurr = points[i]
-                    val controlX = (pPrev.x + pCurr.x) / 2
-                    quadraticTo(controlX, pPrev.y, controlX, pCurr.y)
-                    lineTo(pCurr.x, pCurr.y)
+                    lineTo(points[i].x, points[i].y)
                 }
             }
         }
