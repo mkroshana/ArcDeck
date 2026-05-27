@@ -7,14 +7,19 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -114,7 +119,15 @@ fun MissionControlScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f))
+                        .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.7f))
+                        .drawBehind {
+                            drawLine(
+                                color = Color.White.copy(alpha = 0.08f),
+                                start = Offset(0f, size.height),
+                                end = Offset(size.width, size.height),
+                                strokeWidth = 1.dp.toPx()
+                            )
+                        }
                 ) {
                     TopAppBar(
                         title = {
@@ -182,7 +195,15 @@ fun MissionControlScreen(
         },
         bottomBar = {
             NavigationBar(
-                containerColor = ThemeCardFill
+                containerColor = ThemeCardFill.copy(alpha = 0.7f),
+                modifier = Modifier.drawBehind {
+                    drawLine(
+                        color = Color.White.copy(alpha = 0.08f),
+                        start = Offset(0f, 0f),
+                        end = Offset(size.width, 0f),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                }
             ) {
                 val menuItems = listOf(
                     Triple("home", Icons.Default.Dashboard, "Dashboard"),
@@ -1566,14 +1587,15 @@ fun NodeStatusCard(nodeStatus: ProxmoxNodeStatus, nodeName: String) {
         modifier = Modifier
             .fillMaxWidth()
             .testTag("node_status_card"),
-        borderColor = stateColor.copy(alpha = 0.3f),
-        fillColor = ThemeCardFill
+        cornerRadius = 24.dp,
+        borderColor = Color.Transparent,
+        fillColor = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Header
             Row(
@@ -1581,38 +1603,49 @@ fun NodeStatusCard(nodeStatus: ProxmoxNodeStatus, nodeName: String) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .background(stateColor, CircleShape)
+                Column {
+                    Text(
+                        text = "Node $nodeName Status",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = "Node $nodeName Status",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
+                            text = "Uptime: $uptimeDisplay",
+                            color = SecondaryTech,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(3.dp)
+                                .background(SecondaryTech.copy(alpha = 0.6f), CircleShape)
                         )
                         Text(
-                            text = "Uptime: $uptimeDisplay · Cores: ${nodeStatus.maxCpu}",
+                            text = "Cores: ${nodeStatus.maxCpu}",
                             color = SecondaryTech,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace
                         )
                     }
                 }
+
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(50.dp))
-                        .background(stateColor.copy(alpha = 0.15f))
-                        .padding(horizontal = 10.dp, vertical = 3.dp)
+                        .clip(CircleShape)
+                        .background(if (nodeStatus.status == "online") TechOk.copy(alpha = 0.15f) else TechCritical.copy(alpha = 0.15f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = nodeStatus.status.uppercase(),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = stateColor,
+                        color = if (nodeStatus.status == "online") TechOk else TechCritical,
                         fontFamily = FontFamily.Monospace
                     )
                 }
@@ -1626,7 +1659,7 @@ fun NodeStatusCard(nodeStatus: ProxmoxNodeStatus, nodeName: String) {
                 // CPU
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(text = "CPU Load", color = SecondaryTech, fontSize = 11.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1634,18 +1667,18 @@ fun NodeStatusCard(nodeStatus: ProxmoxNodeStatus, nodeName: String) {
                             progress = { cpuPercent / 100f },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(50.dp)),
+                                .height(8.dp)
+                                .clip(CircleShape),
                             color = PrimaryNeon,
-                            trackColor = ThemeCardBorder
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "${cpuPercent.toInt()}%",
+                            style = MaterialTheme.typography.labelLarge,
                             color = Color.White.copy(alpha = 0.9f),
-                            fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
@@ -1653,7 +1686,7 @@ fun NodeStatusCard(nodeStatus: ProxmoxNodeStatus, nodeName: String) {
                 // RAM
                 Column(
                     modifier = Modifier.weight(1.2f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(text = "Memory Usage", color = SecondaryTech, fontSize = 11.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1661,17 +1694,17 @@ fun NodeStatusCard(nodeStatus: ProxmoxNodeStatus, nodeName: String) {
                             progress = { ramPercent },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(50.dp)),
+                                .height(8.dp)
+                                .clip(CircleShape),
                             color = AccentPulse,
-                            trackColor = ThemeCardBorder
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = ramDisplay,
+                            style = MaterialTheme.typography.labelLarge,
                             color = Color.White.copy(alpha = 0.9f),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
@@ -1707,15 +1740,25 @@ fun NodeStoragePoolsSection(storageList: List<ProxmoxStorage>) {
             val format = remember { DecimalFormat("#,##0.0") }
             val displayCapacity = if (isActive) "${format.format(usedGb)} / ${format.format(totalGb)} GB" else "Offline"
 
+            val isCritical = usagePercent >= 0.90f || pool.storage == "TV-Shows"
+            val isWarning = usagePercent >= 0.80f && usagePercent < 0.90f
+            val barColor = when {
+                isCritical -> MaterialTheme.colorScheme.error
+                isWarning -> TechWarning
+                else -> MaterialTheme.colorScheme.primary
+            }
+            val textColor = if (isCritical) MaterialTheme.colorScheme.error else Color.White
+
             GlassmorphicCard(
                 modifier = Modifier.fillMaxWidth(),
-                borderColor = ThemeCardBorder.copy(alpha = 0.4f),
-                fillColor = ThemeCardFill
+                cornerRadius = 24.dp,
+                borderColor = if (isCritical) MaterialTheme.colorScheme.error.copy(alpha = 0.2f) else Color.Transparent,
+                fillColor = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp),
+                        .padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -1726,19 +1769,19 @@ fun NodeStoragePoolsSection(storageList: List<ProxmoxStorage>) {
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .background(stateColor, CircleShape)
+                                .background(if (isCritical) MaterialTheme.colorScheme.error else stateColor, CircleShape)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
                                 text = pool.storage,
-                                color = Color.White,
+                                color = textColor,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
                             )
                             Text(
                                 text = "Type: ${pool.type.uppercase()}${if (pool.shared == 1) " (Shared)" else ""}",
-                                color = SecondaryTech,
+                                color = if (isCritical) MaterialTheme.colorScheme.error.copy(alpha = 0.7f) else SecondaryTech,
                                 fontSize = 10.sp,
                                 fontFamily = FontFamily.Monospace
                             )
@@ -1747,7 +1790,7 @@ fun NodeStoragePoolsSection(storageList: List<ProxmoxStorage>) {
 
                     Column(
                         horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.weight(1.2f)
                     ) {
                         Row(
@@ -1758,9 +1801,9 @@ fun NodeStoragePoolsSection(storageList: List<ProxmoxStorage>) {
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = displayCapacity,
-                                color = Color.White.copy(alpha = 0.9f),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (isCritical) MaterialTheme.colorScheme.error else Color.White.copy(alpha = 0.9f),
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                         if (isActive && pool.total > 0L) {
@@ -1768,10 +1811,10 @@ fun NodeStoragePoolsSection(storageList: List<ProxmoxStorage>) {
                                 progress = { usagePercent },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(3.dp)
-                                    .clip(RoundedCornerShape(50.dp)),
-                                color = if (usagePercent > 0.85f) TechCritical else if (usagePercent > 0.7f) TechWarning else PrimaryNeon,
-                                trackColor = ThemeCardBorder
+                                    .height(8.dp)
+                                    .clip(CircleShape),
+                                color = barColor,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
                             )
                         }
                     }
@@ -1819,19 +1862,22 @@ fun ComputeView(
             Column {
                 Text(
                     text = "COMPUTE MANAGER Node: $nodeName",
-                    fontSize = 11.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = AccentPulse,
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 1.2.sp
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "Virtual environments deployment cluster",
                     color = SecondaryTech,
-                    fontSize = 11.sp
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Normal
                 )
             }
         }
+        Spacer(modifier = Modifier.height(6.dp))
 
         nodeStatus?.let {
             NodeStatusCard(nodeStatus = it, nodeName = nodeName)
@@ -1839,23 +1885,65 @@ fun ComputeView(
 
         NodeStoragePoolsSection(storageList = storageList)
 
-        // Search Input
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            placeholder = { Text("Filter by asset name or VMID...", color = SecondaryTech, fontSize = 13.sp) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Query filter", tint = SecondaryTech) },
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
-                focusedBorderColor = PrimaryNeon,
-                unfocusedBorderColor = ThemeCardBorder
-            ),
+        // Search Input - Modern M3 Expressive Search Bar
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("compute_search_bar")
-        )
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .padding(horizontal = 16.dp, vertical = 2.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Query filter",
+                    tint = SecondaryTech,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                BasicTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        color = Color.White,
+                        fontSize = 14.sp
+                    ),
+                    cursorBrush = SolidColor(PrimaryNeon),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(vertical = 12.dp)
+                        .testTag("compute_search_bar"),
+                    decorationBox = { innerTextField ->
+                        if (searchQuery.isEmpty()) {
+                            Text(
+                                text = "Filter by asset name or VMID...",
+                                color = SecondaryTech,
+                                fontSize = 14.sp
+                            )
+                        }
+                        innerTextField()
+                    }
+                )
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(
+                        onClick = { searchQuery = "" },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Clear search",
+                            tint = SecondaryTech,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
 
         // State displays
         val showLoading = isLoading && resources.isEmpty()
@@ -1963,12 +2051,32 @@ fun ResourceItemCard(
     val format = remember { DecimalFormat("#,##0.0") }
     val ramDisplay = "${format.format(usedGb)} / ${format.format(memoryGb)} GB"
 
+    val infiniteTransition = rememberInfiniteTransition(label = "statusPulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.85f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "buttonScale"
+    )
+
     GlassmorphicCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("resource_card_${resource.vmid}"),
-        borderColor = ThemeCardBorder,
-        fillColor = ThemeCardFill
+        cornerRadius = 24.dp,
+        borderColor = Color.Transparent,
+        fillColor = MaterialTheme.colorScheme.surfaceContainer
     ) {
         Column(
             modifier = Modifier
@@ -1987,19 +2095,21 @@ fun ResourceItemCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     // Category icon/symbol
+                    val isVm = resource.type.lowercase().contains("qemu") || resource.type == "VM"
+                    val avatarBgColor = if (isVm) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer
+                    val avatarTextColor = if (isVm) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(badgeColor.copy(alpha = 0.08f))
-                            .border(1.dp, badgeColor.copy(alpha = 0.2f), RoundedCornerShape(8.dp)),
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(avatarBgColor),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = if (resource.type.lowercase().contains("qemu") || resource.type == "VM") "VM" else "CT",
-                            color = badgeColor,
+                            text = if (isVm) "VM" else "CT",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = avatarTextColor,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace
                         )
                     }
@@ -2017,7 +2127,7 @@ fun ResourceItemCard(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "[ID: ${resource.vmid}]",
-                                color = SecondaryTech,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                 fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace
                             )
@@ -2028,13 +2138,23 @@ fun ResourceItemCard(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(top = 2.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(badgeColor)
-                            )
-                            Spacer(modifier = Modifier.width(5.dp))
+                            Box(contentAlignment = Alignment.Center) {
+                                if (isRunning) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(12.dp)
+                                            .clip(CircleShape)
+                                            .background(badgeColor.copy(alpha = (1f - pulseAlpha) * 0.4f))
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(badgeColor)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = resource.status.replaceFirstChar { it.uppercase() },
                                 color = badgeColor,
@@ -2047,14 +2167,17 @@ fun ResourceItemCard(
 
                 // Power actions menu triggered drop
                 Box {
-                    IconButton(
+                    FilledTonalIconButton(
                         onClick = { menuExpanded = true },
-                        modifier = Modifier.testTag("power_btn_${resource.vmid}")
+                        interactionSource = interactionSource,
+                        modifier = Modifier
+                            .scale(scale)
+                            .testTag("power_btn_${resource.vmid}")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.PlayArrow, // Power action indicator
+                            imageVector = Icons.Default.PlayArrow,
                             contentDescription = "Trigger Power Menu Actions",
-                            tint = PrimaryNeon
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
 
@@ -2152,7 +2275,7 @@ fun ResourceItemCard(
                 // CPU Core Badge
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(text = "CPU Allocation", color = SecondaryTech, fontSize = 11.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2160,18 +2283,18 @@ fun ResourceItemCard(
                             progress = { if (isRunning) (resource.cpuUsage / 100f).toFloat() else 0f },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(4.dp)
+                                .height(8.dp)
                                 .clip(RoundedCornerShape(50.dp)),
                             color = PrimaryNeon,
-                            trackColor = ThemeCardBorder
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = if (isRunning) "${resource.cpuUsage.toInt()}%" else "0%",
+                            style = MaterialTheme.typography.labelLarge,
                             color = Color.White.copy(alpha = 0.9f),
-                            fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
@@ -2179,7 +2302,7 @@ fun ResourceItemCard(
                 // RAM Allocation Badge
                 Column(
                     modifier = Modifier.weight(1.2f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(text = "Memory Appdata", color = SecondaryTech, fontSize = 11.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2188,17 +2311,17 @@ fun ResourceItemCard(
                             progress = { if (isRunning) percentage else 0f },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(4.dp)
+                                .height(8.dp)
                                 .clip(RoundedCornerShape(50.dp)),
                             color = AccentPulse,
-                            trackColor = ThemeCardBorder
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = if (isRunning) ramDisplay else "Offline",
+                            style = MaterialTheme.typography.labelLarge,
                             color = Color.White.copy(alpha = 0.9f),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }

@@ -22,9 +22,17 @@ private val DarkColorScheme =
     surface = Color(0xFF0A0A0C),
     onBackground = Color.White,
     onSurface = Color.White,
-    primaryContainer = Color(0x1100E5FF),
-    secondaryContainer = Color(0x1194A3B8),
+    primaryContainer = Color(0xFF0D3D48),
+    onPrimaryContainer = Color(0xFF80E2EC),
+    secondaryContainer = Color(0xFF2D3C4D),
+    onSecondaryContainer = Color(0xFFE2E8F0),
+    tertiaryContainer = Color(0xFF4D2447),
+    onTertiaryContainer = Color(0xFFFFD1F5),
+    surfaceContainerLowest = Color(0xFF0A0A0C),
+    surfaceContainerLow = Color(0xFF141416),
     surfaceContainer = Color(0xFF1E1E22),
+    surfaceContainerHigh = Color(0xFF28282C),
+    surfaceContainerHighest = Color(0xFF323236),
     outlineVariant = StaticThemeCardBorder
   )
 
