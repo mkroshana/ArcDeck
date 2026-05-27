@@ -17,6 +17,9 @@ import com.squareup.moshi.Moshi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
@@ -74,6 +77,10 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
     private val proxmoxRepository = ProxmoxRepository(okHttpClient)
     private val unraidRepository = UnraidRepository(UnraidGraphQLClient(okHttpClient, moshi))
     private val arrRepository = ArrRepository(okHttpClient)
+
+    private var fastRefreshJob: Job? = null
+    private var mediumRefreshJob: Job? = null
+    private var slowRefreshJob: Job? = null
 
     // API UI States — Proxmox
     private val _proxmoxResources = MutableStateFlow<List<ProxmoxResource>>(emptyList())
@@ -189,29 +196,192 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
         }
 
         // Active periodically refreshed dashboard loader
-        startTelemetrySimulation()
-        startDataRefreshLoop()
+        startDataRefreshLoops()
+    }
+
+    private fun cancelDataRefreshLoops() {
+        fastRefreshJob?.cancel()
+        mediumRefreshJob?.cancel()
+        slowRefreshJob?.cancel()
     }
 
     /**
-     * Periodically refresh independent data repos: Proxmox, Unraid, and Arr
+     * Periodically refresh independent data loops at different frequencies
      */
-    private fun startDataRefreshLoop() {
-        viewModelScope.launch {
+    private fun startDataRefreshLoops() {
+        cancelDataRefreshLoops()
+
+        // 1. Fast loop: telemetry (CPU/RAM utilization + Network simulator) - every 1.0 second
+        fastRefreshJob = viewModelScope.launch {
             while (true) {
-                refreshAllRepositories()
-                delay(8000) // load background telemetry/health updates every 8 seconds
+                refreshFastTelemetry()
+                delay(1000)
+            }
+        }
+
+        // 2. Medium loop: Array overview, Proxmox VMs, Arr queue, Notifications - every 5 seconds
+        mediumRefreshJob = viewModelScope.launch {
+            while (true) {
+                refreshMediumData()
+                delay(5000)
+            }
+        }
+
+        // 3. Slow loop: System info, Docker list, VM list - every 15 seconds
+        slowRefreshJob = viewModelScope.launch {
+            while (true) {
+                refreshSlowData()
+                delay(15000)
             }
         }
     }
 
-    suspend fun refreshAllRepositories() {
-        refreshProxmox()
-        refreshUnraid()
-        refreshArr()
-        
-        // Dynamically compute global metrics if demo mode or success values exist
+    suspend fun refreshFastTelemetry() = withContext(Dispatchers.IO) {
+        val url = unraidUrl.value
+        val token = unraidToken.value
+        val demo = useDemoMode.value
+
+        // Fetch CPU & RAM utilization
+        val utilResult = unraidRepository.getCpuAndMemoryUtilization(url, token, demo)
+        utilResult.onSuccess { (cpu, mem) ->
+            _unraidCpuUtil.value = cpu
+            _unraidMemoryUtil.value = mem
+        }
+
+        // Network simulation
+        val down = 1.0 + Random.nextDouble(1.0, 150.0)
+        val up = 0.5 + Random.nextDouble(0.1, 15.0)
+        _netDown.value = String.format(java.util.Locale.US, "%.1f", down).toDouble()
+        _netUp.value = String.format(java.util.Locale.US, "%.1f", up).toDouble()
+
+        // Fallback simulated CPU if no utilization yet
+        if (_unraidCpuUtil.value == null) {
+            _currentCpu.value = Random.nextInt(15, 60)
+        }
+
+        // Trigger initial demo data population if needed
+        if (demo) {
+            if (_proxmoxResources.value.isEmpty()) {
+                _proxmoxResources.value = proxmoxRepository.getResources("", "", "", true).getOrDefault(emptyList())
+            }
+            if (_unraidArray.value == null) {
+                _unraidArray.value = unraidRepository.getArrayOverview("", "", true).getOrNull()
+            }
+            if (_arrQueue.value.isEmpty()) {
+                _arrQueue.value = arrRepository.getActiveQueue("", "", true).getOrDefault(emptyList())
+            }
+            if (_unraidSystemInfo.value == null) {
+                _unraidSystemInfo.value = unraidRepository.getSystemInfo("", "", true).getOrNull()
+            }
+            if (_unraidDockerContainers.value.isEmpty()) {
+                _unraidDockerContainers.value = unraidRepository.getDockerContainers("", "", true).getOrDefault(emptyList())
+            }
+            if (_unraidVms.value.isEmpty()) {
+                _unraidVms.value = unraidRepository.getVMs("", "", true).getOrDefault(emptyList())
+            }
+            if (_unraidNotifications.value == null) {
+                _unraidNotifications.value = unraidRepository.getNotificationOverview("", "", true).getOrNull()
+            }
+        }
+
+        // Recompute aggregate metrics
         calculateAggregateMetrics()
+    }
+
+    suspend fun refreshMediumData() = withContext(Dispatchers.IO) {
+        val url = unraidUrl.value
+        val token = unraidToken.value
+        val demo = useDemoMode.value
+
+        // Proxmox Resources
+        val pveResult = proxmoxRepository.getResources(
+            baseUrl = proxmoxUrl.value,
+            token = proxmoxToken.value,
+            node = proxmoxNode.value,
+            useDemoFallback = demo
+        )
+        pveResult.onSuccess {
+            _proxmoxResources.value = it
+            _proxmoxError.value = null
+        }.onFailure {
+            _proxmoxError.value = it.localizedMessage ?: "Connection Timeout"
+            repository.insertTerminalLog(TerminalLog(timestamp = System.currentTimeMillis(), level = "ERROR", source = "PROXMOX", message = "PVE API Error: ${it.message}"))
+        }
+
+        // Unraid Array Overview
+        val arrayResult = unraidRepository.getArrayOverview(url, token, demo)
+        arrayResult.onSuccess {
+            _unraidArray.value = it
+            _unraidError.value = null
+        }.onFailure {
+            _unraidError.value = it.localizedMessage ?: "GraphQL Query Failure"
+            repository.insertTerminalLog(TerminalLog(timestamp = System.currentTimeMillis(), level = "ERROR", source = "UNRAID", message = "Unraid GraphQL Error: ${it.message}"))
+        }
+
+        // Unraid Notifications
+        unraidRepository.getNotificationOverview(url, token, demo).onSuccess {
+            _unraidNotifications.value = it
+        }
+
+        // Arr Queue
+        val arrResult = arrRepository.getActiveQueue(
+            baseUrl = arrUrl.value,
+            apiKey = arrApiKey.value,
+            useDemoFallback = demo
+        )
+        arrResult.onSuccess {
+            _arrQueue.value = it
+            _arrError.value = null
+        }.onFailure {
+            _arrError.value = it.localizedMessage ?: "Arr REST Response Timeout"
+            repository.insertTerminalLog(TerminalLog(timestamp = System.currentTimeMillis(), level = "ERROR", source = "ARR", message = "Arr API Error: ${it.message}"))
+        }
+    }
+
+    suspend fun refreshSlowData() = withContext(Dispatchers.IO) {
+        val url = unraidUrl.value
+        val token = unraidToken.value
+        val demo = useDemoMode.value
+
+        // Unraid System Info
+        unraidRepository.getSystemInfo(url, token, demo).onSuccess {
+            _unraidSystemInfo.value = it
+        }
+
+        // Unraid Docker Containers
+        unraidRepository.getDockerContainers(url, token, demo).onSuccess {
+            _unraidDockerContainers.value = it
+        }
+
+        // Unraid VMs
+        unraidRepository.getVMs(url, token, demo).onSuccess {
+            _unraidVms.value = it
+        }
+    }
+
+    suspend fun refreshAllRepositories() {
+        _isLoadingProxmox.value = true
+        _isLoadingUnraid.value = true
+        _isLoadingArr.value = true
+        _proxmoxError.value = null
+        _unraidError.value = null
+        _arrError.value = null
+
+        // Cancel background loops to prevent concurrent requests during force refresh
+        cancelDataRefreshLoops()
+
+        try {
+            refreshFastTelemetry()
+            refreshMediumData()
+            refreshSlowData()
+        } finally {
+            _isLoadingProxmox.value = false
+            _isLoadingUnraid.value = false
+            _isLoadingArr.value = false
+
+            // Restart the loops after force sync completes
+            startDataRefreshLoops()
+        }
     }
 
     private fun calculateAggregateMetrics() {
@@ -245,82 +415,6 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
             if (totalKb > 0) {
                 _currentStorage.value = ((usedKb.toDouble() / totalKb.toDouble()) * 100).toInt().coerceIn(1, 99)
             }
-        }
-    }
-
-    suspend fun refreshProxmox() {
-        _isLoadingProxmox.value = true
-        _proxmoxError.value = null
-        val result = proxmoxRepository.getResources(
-            baseUrl = proxmoxUrl.value,
-            token = proxmoxToken.value,
-            node = proxmoxNode.value,
-            useDemoFallback = useDemoMode.value
-        )
-        result.onSuccess {
-            _proxmoxResources.value = it
-            _isLoadingProxmox.value = false
-        }.onFailure {
-            _proxmoxError.value = it.localizedMessage ?: "Connection Timeout"
-            _isLoadingProxmox.value = false
-            repository.insertTerminalLog(TerminalLog(timestamp = System.currentTimeMillis(), level = "ERROR", source = "PROXMOX", message = "PVE API Error: ${it.message}"))
-        }
-    }
-
-    suspend fun refreshUnraid() {
-        _isLoadingUnraid.value = true
-        _unraidError.value = null
-        val url = unraidUrl.value
-        val token = unraidToken.value
-        val demo = useDemoMode.value
-
-        try {
-            // Fetch all Unraid data in parallel-like sequence
-            val arrayResult = unraidRepository.getArrayOverview(url, token, demo)
-            arrayResult.onSuccess { _unraidArray.value = it }
-                .onFailure { throw it }
-
-            val sysResult = unraidRepository.getSystemInfo(url, token, demo)
-            sysResult.onSuccess { _unraidSystemInfo.value = it }
-
-            val utilResult = unraidRepository.getCpuAndMemoryUtilization(url, token, demo)
-            utilResult.onSuccess { (cpu, mem) ->
-                _unraidCpuUtil.value = cpu
-                _unraidMemoryUtil.value = mem
-            }
-
-            val dockerResult = unraidRepository.getDockerContainers(url, token, demo)
-            dockerResult.onSuccess { _unraidDockerContainers.value = it }
-
-            val vmResult = unraidRepository.getVMs(url, token, demo)
-            vmResult.onSuccess { _unraidVms.value = it }
-
-            val notifResult = unraidRepository.getNotificationOverview(url, token, demo)
-            notifResult.onSuccess { _unraidNotifications.value = it }
-
-            _isLoadingUnraid.value = false
-        } catch (e: Exception) {
-            _unraidError.value = e.localizedMessage ?: "GraphQL Query Failure"
-            _isLoadingUnraid.value = false
-            repository.insertTerminalLog(TerminalLog(timestamp = System.currentTimeMillis(), level = "ERROR", source = "UNRAID", message = "Unraid GraphQL Error: ${e.message}"))
-        }
-    }
-
-    suspend fun refreshArr() {
-        _isLoadingArr.value = true
-        _arrError.value = null
-        val result = arrRepository.getActiveQueue(
-            baseUrl = arrUrl.value,
-            apiKey = arrApiKey.value,
-            useDemoFallback = useDemoMode.value
-        )
-        result.onSuccess {
-            _arrQueue.value = it
-            _isLoadingArr.value = false
-        }.onFailure {
-            _arrError.value = it.localizedMessage ?: "Arr REST Response Timeout"
-            _isLoadingArr.value = false
-            repository.insertTerminalLog(TerminalLog(timestamp = System.currentTimeMillis(), level = "ERROR", source = "ARR", message = "Arr API Error: ${it.message}"))
         }
     }
 
@@ -421,34 +515,7 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun startTelemetrySimulation() {
-        viewModelScope.launch {
-            while (true) {
-                delay(3000)
-                val randCpu = Random.nextInt(15, 60)
-                // Only override CPU with random if we don't have real/demo utilization yet
-                if (_unraidCpuUtil.value == null) {
-                    _currentCpu.value = randCpu
-                }
-
-                val down = 1.0 + Random.nextDouble(1.0, 150.0)
-                val up = 0.5 + Random.nextDouble(0.1, 15.0)
-                _netDown.value = String.format(java.util.Locale.US, "%.1f", down).toDouble()
-                _netUp.value = String.format(java.util.Locale.US, "%.1f", up).toDouble()
-
-                // If in demo mode and data is empty, trigger initial load
-                if (useDemoMode.value) {
-                    if (_proxmoxResources.value.isEmpty()) {
-                        _proxmoxResources.value = proxmoxRepository.getResources("", "", "", true).getOrDefault(emptyList())
-                    }
-                    if (_unraidArray.value == null) {
-                        refreshUnraid()
-                    }
-                    if (_arrQueue.value.isEmpty()) {
-                        _arrQueue.value = arrRepository.getActiveQueue("", "", true).getOrDefault(emptyList())
-                    }
-                }
-            }
-        }
+        // Redundant, merged into fast telemetry loops
     }
 
     // Unchanged interactive DB actions for general logging/service list compatibility

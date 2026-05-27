@@ -101,46 +101,59 @@ fun MissionControlScreen(
             .fillMaxSize()
             .background(ThemeBackground),
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Core Logo",
-                            tint = PrimaryNeon,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "HOMELAB COMMAND",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = Color.White,
-                            fontFamily = FontFamily.Monospace,
-                            letterSpacing = 1.2.sp
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                viewModel.refreshAllRepositories()
-                            }
-                        },
-                        modifier = Modifier.testTag("global_refresh_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Force Synchronization",
-                            tint = PrimaryNeon
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = ThemeBackground
+            Column {
+                TopAppBar(
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Core Logo",
+                                tint = PrimaryNeon,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "HOMELAB COMMAND",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = Color.White,
+                                fontFamily = FontFamily.Monospace,
+                                letterSpacing = 1.2.sp
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    viewModel.refreshAllRepositories()
+                                }
+                            },
+                            modifier = Modifier.testTag("global_refresh_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Force Synchronization",
+                                tint = PrimaryNeon
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = ThemeBackground
+                    )
                 )
-            )
+                if (loadingPve || loadingUnraid || loadingArr) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.dp),
+                        color = PrimaryNeon,
+                        trackColor = Color.Transparent
+                    )
+                } else {
+                    Spacer(modifier = Modifier.height(2.dp))
+                }
+            }
         },
         bottomBar = {
             NavigationBar(
@@ -392,7 +405,10 @@ fun DashboardView(
             letterSpacing = 1.2.sp
         )
 
-        if (loadingUnraid) {
+        val showLoading = loadingUnraid && unraidArray == null
+        val showError = unraidError != null && !useDemo && unraidArray == null
+
+        if (showLoading) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -401,7 +417,7 @@ fun DashboardView(
             ) {
                 CircularProgressIndicator(color = PrimaryNeon)
             }
-        } else if (unraidError != null && !useDemo) {
+        } else if (showError) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -419,6 +435,32 @@ fun DashboardView(
             }
         } else if (unraidArray != null) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (unraidError != null && !useDemo) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(TechCritical.copy(alpha = 0.1f))
+                            .border(1.dp, TechCritical.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = "Error",
+                                tint = TechCritical,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Refresh failed: $unraidError",
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+
                 // Array State & Capacity Card
                 ArrayStatusCard(array = unraidArray!!)
 
@@ -980,7 +1022,10 @@ fun ComputeView(
         )
 
         // State displays
-        if (isLoading) {
+        val showLoading = isLoading && resources.isEmpty()
+        val showError = error != null && !useDemo && resources.isEmpty()
+
+        if (showLoading) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -989,7 +1034,7 @@ fun ComputeView(
             ) {
                 CircularProgressIndicator(color = PrimaryNeon)
             }
-        } else if (error != null && !useDemo) {
+        } else if (showError) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1006,6 +1051,33 @@ fun ComputeView(
                 }
             }
         } else {
+            if (error != null && !useDemo && resources.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(TechCritical.copy(alpha = 0.1f))
+                        .border(1.dp, TechCritical.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Error",
+                            tint = TechCritical,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Refresh failed: $error",
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1269,7 +1341,9 @@ fun UnraidDetailView(
     error: String?,
     useDemo: Boolean
 ) {
-    if (isLoading) {
+    val hasNoData = systemInfo == null && dockerContainers.isEmpty() && vms.isEmpty()
+
+    if (isLoading && hasNoData) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
@@ -1279,7 +1353,7 @@ fun UnraidDetailView(
         return
     }
 
-    if (error != null && !useDemo) {
+    if (error != null && !useDemo && hasNoData) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1305,6 +1379,32 @@ fun UnraidDetailView(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Spacer(modifier = Modifier.height(4.dp))
+
+        if (error != null && !useDemo) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(TechCritical.copy(alpha = 0.1f))
+                    .border(1.dp, TechCritical.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                    .padding(10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = "Error",
+                        tint = TechCritical,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Refresh failed: $error",
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
 
         // ---- System Info Card ----
         Text(
@@ -1742,7 +1842,10 @@ fun MediaQueueView(
         }
 
         // Output UI State
-        if (isLoading) {
+        val showLoading = isLoading && queueItems.isEmpty()
+        val showError = error != null && !useDemo && queueItems.isEmpty()
+
+        if (showLoading) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1751,7 +1854,7 @@ fun MediaQueueView(
             ) {
                 CircularProgressIndicator(color = PrimaryNeon)
             }
-        } else if (error != null && !useDemo) {
+        } else if (showError) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1768,6 +1871,33 @@ fun MediaQueueView(
                 }
             }
         } else {
+            if (error != null && !useDemo && queueItems.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(TechCritical.copy(alpha = 0.1f))
+                        .border(1.dp, TechCritical.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Error",
+                            tint = TechCritical,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Refresh failed: $error",
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
