@@ -3675,6 +3675,7 @@ fun DownloadQueueItemRow(item: ArrQueueItem) {
 // ============================================================================
 // 4. CONFIGURATIONS SETTINGS VIEW (To update header placeholders and urls)
 // ============================================================================
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsView(
     viewModel: HomelabViewModel,
@@ -3687,279 +3688,339 @@ fun SettingsView(
     initialArrApiKey: String,
     initialUseDemo: Boolean
 ) {
-    var pveUrl by remember { mutableStateOf(initialPveUrl) }
+    var pveUrl by remember { mutableStateOf(if (initialPveUrl.isEmpty()) "https://10.10.10.31:8006" else initialPveUrl) }
     var pveToken by remember { mutableStateOf(initialPveToken) }
-    var pveNode by remember { mutableStateOf(initialPveNode) }
+    var pveNode by remember { mutableStateOf(if (initialPveNode.isEmpty()) "pve1" else initialPveNode) }
 
-    var unUrl by remember { mutableStateOf(initialUnUrl) }
+    var unUrl by remember { mutableStateOf(if (initialUnUrl.isEmpty()) "https://10.10.10.30/graphql" else initialUnUrl) }
     var unToken by remember { mutableStateOf(initialUnToken) }
 
-    var arrUrl by remember { mutableStateOf(initialArrUrl) }
+    var arrUrl by remember { mutableStateOf(if (initialArrUrl.isEmpty()) "http://10.10.10.117:7878" else initialArrUrl) }
     var arrApiKey by remember { mutableStateOf(initialArrApiKey) }
 
     var useDemo by remember { mutableStateOf(initialUseDemo) }
+    var activePoolForBottomSheet by remember { mutableStateOf<String?>(null) }
 
     val unraidArray by viewModel.unraidArray.collectAsStateWithLifecycle()
     val poolTypes by viewModel.unraidPoolTypes.collectAsStateWithLifecycle()
 
     val poolNames = remember(unraidArray) {
-        unraidArray?.caches?.mapNotNull { disk ->
+        val list = unraidArray?.caches?.mapNotNull { disk ->
             disk.name?.replace(Regex("\\d+$"), "")
         }?.distinct() ?: emptyList()
+        if (list.isEmpty()) listOf("spinning-disks") else list
     }
 
     val scope = rememberCoroutineScope()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = "HARDWARE ENDPOINTS CREDENTIALS",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = AccentPulse,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = 1.2.sp
-        )
-
-        // Demo fallback configuration strip
-        GlassmorphicCard(
-            modifier = Modifier.fillMaxWidth(),
-            borderColor = ThemeCardBorder,
-            fillColor = ThemeCardFill
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Demo Simulation Fallback Mode",
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp
-                    )
-                    Text(
-                        text = "Returns visually rich mock structures to explore app capabilities when offline",
-                        color = SecondaryTech,
-                        fontSize = 11.sp
-                    )
-                }
+            Spacer(modifier = Modifier.height(4.dp))
 
-                Switch(
-                    checked = useDemo,
-                    onCheckedChange = { useDemo = it },
-                    modifier = Modifier.testTag("settings_demo_switch")
-                )
-            }
-        }
-
-        // Proxmox parameters card
-        Text(
-            text = "PROXMOX VE REST CONFIGURATION",
-            fontSize = 10.sp,
-            color = SecondaryTech,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace
-        )
-
-        GlassmorphicCard(
-            modifier = Modifier.fillMaxWidth(),
-            borderColor = ThemeCardBorder,
-            fillColor = ThemeCardFill
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedTextField(
-                    value = pveUrl,
-                    onValueChange = { pveUrl = it },
-                    label = { Text("Base URL", fontSize = 12.sp) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                        focusedBorderColor = PrimaryNeon, unfocusedBorderColor = ThemeCardBorder
-                    ),
-                    modifier = Modifier.fillMaxWidth().testTag("setting_pve_url")
-                )
-
-                OutlinedTextField(
-                    value = pveNode,
-                    onValueChange = { pveNode = it },
-                    label = { Text("Target Node Name (e.g. pve)", fontSize = 12.sp) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                        focusedBorderColor = PrimaryNeon, unfocusedBorderColor = ThemeCardBorder
-                    ),
-                    modifier = Modifier.fillMaxWidth().testTag("setting_pve_node")
-                )
-
-                OutlinedTextField(
-                    value = pveToken,
-                    onValueChange = { pveToken = it },
-                    label = { Text("Authorization Token (PVEAPIToken)", fontSize = 12.sp) },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                        focusedBorderColor = PrimaryNeon, unfocusedBorderColor = ThemeCardBorder
-                    ),
-                    modifier = Modifier.fillMaxWidth().testTag("setting_pve_token")
-                )
-
-                val tokenClean = pveToken.trim()
-                val isJustSecret = tokenClean.isNotEmpty() && !tokenClean.contains("!")
-                
-                if (isJustSecret) {
-                    Text(
-                        text = "⚠️ Enter the full token (USER@REALM!TOKENID=SECRET), not just the secret key!",
-                        color = TechWarning,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                } else {
-                    Text(
-                        text = "Format: USER@REALM!TOKENID=SECRET (e.g. root@pam!token-name=1234-abcd-...)",
-                        color = SecondaryTech.copy(alpha = 0.7f),
-                        fontSize = 11.sp
-                    )
-                }
-            }
-        }
-
-        // Unraid GraphQL parameters card
-        Text(
-            text = "UNRAID GRAPHQL CONFIGURATION",
-            fontSize = 10.sp,
-            color = SecondaryTech,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace
-        )
-
-        GlassmorphicCard(
-            modifier = Modifier.fillMaxWidth(),
-            borderColor = ThemeCardBorder,
-            fillColor = ThemeCardFill
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedTextField(
-                    value = unUrl,
-                    onValueChange = { unUrl = it },
-                    label = { Text("GraphQL API Endpoint", fontSize = 12.sp) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                        focusedBorderColor = PrimaryNeon, unfocusedBorderColor = ThemeCardBorder
-                    ),
-                    modifier = Modifier.fillMaxWidth().testTag("setting_unraid_url")
-                )
-
-                OutlinedTextField(
-                    value = unToken,
-                    onValueChange = { unToken = it },
-                    label = { Text("GraphQL Secret Key / Bearer Header", fontSize = 12.sp) },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                        focusedBorderColor = PrimaryNeon, unfocusedBorderColor = ThemeCardBorder
-                    ),
-                    modifier = Modifier.fillMaxWidth().testTag("setting_unraid_token")
-                )
-            }
-        }
-
-        // Pools configuration card
-        if (poolNames.isNotEmpty()) {
             Text(
-                text = "UNRAID POOLS CONFIGURATION",
-                fontSize = 10.sp,
-                color = SecondaryTech,
+                text = "HARDWARE ENDPOINTS CREDENTIALS",
+                style = MaterialTheme.typography.labelLarge,
+                color = AccentPulse,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.2.sp
+            )
+
+            // Demo fallback configuration strip - Surface Container High
+            GlassmorphicCard(
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 24.dp,
+                borderWidth = 0.dp,
+                borderColor = Color.Transparent,
+                fillColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Demo Simulation Fallback Mode",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Returns mock structures to explore app capabilities when offline",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    Switch(
+                        checked = useDemo,
+                        onCheckedChange = { useDemo = it },
+                        thumbContent = {
+                            Icon(
+                                imageVector = if (useDemo) Icons.Default.Check else Icons.Default.Close,
+                                contentDescription = null,
+                                modifier = Modifier.size(SwitchDefaults.IconSize)
+                            )
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                            uncheckedThumbColor = MaterialTheme.colorScheme.surfaceVariant,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            uncheckedIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        modifier = Modifier.testTag("settings_demo_switch")
+                    )
+                }
+            }
+
+            // Proxmox parameters card
+            Text(
+                text = "PROXMOX VE REST CONFIGURATION",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.sp
             )
 
             GlassmorphicCard(
                 modifier = Modifier.fillMaxWidth(),
-                borderColor = ThemeCardBorder,
-                fillColor = ThemeCardFill
+                cornerRadius = 24.dp,
+                borderWidth = 0.dp,
+                borderColor = Color.Transparent,
+                fillColor = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    poolNames.forEach { poolName ->
-                        var expanded by remember { mutableStateOf(false) }
-                        val currentType = poolTypes[poolName] ?: "AUTO"
-                        val options = listOf(
-                            "AUTO" to "Auto-Detect",
-                            "CACHE" to "Standard Cache",
-                            "ZFS_RAIDZ1" to "ZFS (RAIDZ1)",
-                            "ZFS_RAIDZ2" to "ZFS (RAIDZ2)",
-                            "ZFS_RAIDZ3" to "ZFS (RAIDZ3)",
-                            "ZFS_MIRROR" to "ZFS (Mirror)",
-                            "ZFS_STRIPE" to "ZFS (Stripe)",
-                            "ZFS_SINGLE" to "ZFS (Single)"
+                    TextField(
+                        value = pveUrl,
+                        onValueChange = { pveUrl = it },
+                        label = { Text("Base URL", fontSize = 11.sp) },
+                        singleLine = true,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            focusedIndicatorColor = PrimaryNeon,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("setting_pve_url")
+                    )
+
+                    TextField(
+                        value = pveNode,
+                        onValueChange = { pveNode = it },
+                        label = { Text("Target Node Name (e.g. pve)", fontSize = 11.sp) },
+                        singleLine = true,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            focusedIndicatorColor = PrimaryNeon,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("setting_pve_node")
+                    )
+
+                    TextField(
+                        value = pveToken,
+                        onValueChange = { pveToken = it },
+                        label = { Text("Authorization Token (PVEAPIToken)", fontSize = 11.sp) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            focusedIndicatorColor = PrimaryNeon,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("setting_pve_token")
+                    )
+
+                    val tokenClean = pveToken.trim()
+                    val isJustSecret = tokenClean.isNotEmpty() && !tokenClean.contains("!")
+                    
+                    if (isJustSecret) {
+                        Text(
+                            text = "⚠️ Enter the full token (USER@REALM!TOKENID=SECRET), not just the secret key!",
+                            color = TechWarning,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium
                         )
-                        val displayValue = options.find { it.first == currentType }?.second ?: currentType
+                    } else {
+                        Text(
+                            text = "Format: USER@REALM!TOKENID=SECRET (e.g. root@pam!token-name=1234-abcd-...)",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(text = poolName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                Text(text = "Assign pool role and RAID type", color = SecondaryTech, fontSize = 10.sp)
-                            }
+            // Unraid GraphQL parameters card
+            Text(
+                text = "UNRAID GRAPHQL CONFIGURATION",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.sp
+            )
 
-                            Box {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(ThemeCardBorder)
-                                        .clickable { expanded = true }
-                                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(text = displayValue, color = PrimaryNeon, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = PrimaryNeon, modifier = Modifier.size(16.dp))
-                                    }
+            GlassmorphicCard(
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 24.dp,
+                borderWidth = 0.dp,
+                borderColor = Color.Transparent,
+                fillColor = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    TextField(
+                        value = unUrl,
+                        onValueChange = { unUrl = it },
+                        label = { Text("GraphQL API Endpoint", fontSize = 11.sp) },
+                        singleLine = true,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            focusedIndicatorColor = PrimaryNeon,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("setting_unraid_url")
+                    )
+
+                    TextField(
+                        value = unToken,
+                        onValueChange = { unToken = it },
+                        label = { Text("GraphQL Secret Key / Bearer Header", fontSize = 11.sp) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            focusedIndicatorColor = PrimaryNeon,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("setting_unraid_token")
+                    )
+                }
+            }
+
+            // Pools configuration card
+            if (poolNames.isNotEmpty()) {
+                Text(
+                    text = "UNRAID POOLS CONFIGURATION",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.sp
+                )
+
+                GlassmorphicCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    cornerRadius = 24.dp,
+                    borderWidth = 0.dp,
+                    borderColor = Color.Transparent,
+                    fillColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        poolNames.forEach { poolName ->
+                            val currentType = poolTypes[poolName] ?: if (poolName == "spinning-disks") "ZFS_RAIDZ1" else "AUTO"
+                            val options = listOf(
+                                "AUTO" to "Auto-Detect",
+                                "CACHE" to "Standard Cache",
+                                "ZFS_RAIDZ1" to "ZFS (RAIDZ1)",
+                                "ZFS_RAIDZ2" to "ZFS (RAIDZ2)",
+                                "ZFS_RAIDZ3" to "ZFS (RAIDZ3)",
+                                "ZFS_MIRROR" to "ZFS (Mirror)",
+                                "ZFS_STRIPE" to "ZFS (Stripe)",
+                                "ZFS_SINGLE" to "ZFS (Single)"
+                            )
+                            val displayValue = options.find { it.first == currentType }?.second ?: currentType
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = poolName, 
+                                        color = Color.White, 
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Assign pool role and RAID type", 
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant, 
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
                                 }
 
-                                DropdownMenu(
-                                    expanded = expanded,
-                                    onDismissRequest = { expanded = false },
-                                    modifier = Modifier.background(ThemeCardFill).border(1.dp, ThemeCardBorder, RoundedCornerShape(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .clickable { activePoolForBottomSheet = poolName }
+                                        .height(56.dp)
+                                        .width(180.dp)
+                                        .padding(horizontal = 16.dp),
+                                    contentAlignment = Alignment.CenterStart
                                 ) {
-                                    options.forEach { (typeKey, typeLabel) ->
-                                        DropdownMenuItem(
-                                            text = { Text(typeLabel, color = Color.White, fontSize = 12.sp) },
-                                            onClick = {
-                                                viewModel.savePoolType(poolName, if (typeKey == "AUTO") "" else typeKey)
-                                                expanded = false
-                                            }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = displayValue, 
+                                            color = Color.White, 
+                                            style = MaterialTheme.typography.bodyMedium, 
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown, 
+                                            contentDescription = null, 
+                                            tint = PrimaryNeon, 
+                                            modifier = Modifier.size(24.dp)
                                         )
                                     }
                                 }
@@ -3968,57 +4029,72 @@ fun SettingsView(
                     }
                 }
             }
-        }
 
-        // *Arr server queue parameters card
-        Text(
-            text = "SERVICES MANAGER (*ARR) CONFIGURATION",
-            fontSize = 10.sp,
-            color = SecondaryTech,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace
-        )
+            // *Arr server queue parameters card
+            Text(
+                text = "SERVICES MANAGER (*ARR) CONFIGURATION",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.sp
+            )
 
-        GlassmorphicCard(
-            modifier = Modifier.fillMaxWidth(),
-            borderColor = ThemeCardBorder,
-            fillColor = ThemeCardFill
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            GlassmorphicCard(
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 24.dp,
+                borderWidth = 0.dp,
+                borderColor = Color.Transparent,
+                fillColor = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
-                OutlinedTextField(
-                    value = arrUrl,
-                    onValueChange = { arrUrl = it },
-                    label = { Text("Base URL (Radarr/Sonarr)", fontSize = 12.sp) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                        focusedBorderColor = PrimaryNeon, unfocusedBorderColor = ThemeCardBorder
-                    ),
-                    modifier = Modifier.fillMaxWidth().testTag("setting_arr_url")
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    TextField(
+                        value = arrUrl,
+                        onValueChange = { arrUrl = it },
+                        label = { Text("Base URL (Radarr/Sonarr)", fontSize = 11.sp) },
+                        singleLine = true,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            focusedIndicatorColor = PrimaryNeon,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("setting_arr_url")
+                    )
 
-                OutlinedTextField(
-                    value = arrApiKey,
-                    onValueChange = { arrApiKey = it },
-                    label = { Text("Authorization Key (X-Api-Key)", fontSize = 12.sp) },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                        focusedBorderColor = PrimaryNeon, unfocusedBorderColor = ThemeCardBorder
-                    ),
-                    modifier = Modifier.fillMaxWidth().testTag("setting_arr_key")
-                )
+                    TextField(
+                        value = arrApiKey,
+                        onValueChange = { arrApiKey = it },
+                        label = { Text("Authorization Key (X-Api-Key)", fontSize = 11.sp) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            focusedIndicatorColor = PrimaryNeon,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("setting_arr_key")
+                    )
+                }
             }
+
+            Spacer(modifier = Modifier.height(100.dp))
         }
 
-        // Save command parameters buttons
-        Button(
+        // Sticky Extended FAB
+        ExtendedFloatingActionButton(
             onClick = {
                 viewModel.updateSettings(
                     pveUrl = pveUrl, pveToken = pveToken, pveNode = pveNode,
@@ -4027,24 +4103,110 @@ fun SettingsView(
                     demo = useDemo
                 )
             },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = PrimaryNeon,
-                contentColor = ThemeBackground
-            ),
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 10.dp)
-                .height(48.dp)
-                .testTag("save_settings_button")
+                .align(Alignment.BottomEnd)
+                .padding(end = 20.dp, bottom = 24.dp)
+                .testTag("save_settings_button"),
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            elevation = FloatingActionButtonDefaults.elevation(
+                defaultElevation = 12.dp,
+                pressedElevation = 16.dp
+            )
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Build, contentDescription = "Publish Key")
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "Apply Configuration Changes", fontWeight = FontWeight.Bold)
-            }
+            Icon(Icons.Default.Build, contentDescription = "Apply Changes")
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(text = "Apply Configuration Changes", fontWeight = FontWeight.Bold)
         }
 
-        Spacer(modifier = Modifier.height(26.dp))
+        // Modal Bottom Sheet for Pool RAID Selector
+        if (activePoolForBottomSheet != null) {
+            val targetPool = activePoolForBottomSheet!!
+            val currentType = poolTypes[targetPool] ?: if (targetPool == "spinning-disks") "ZFS_RAIDZ1" else "AUTO"
+            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            
+            ModalBottomSheet(
+                onDismissRequest = { activePoolForBottomSheet = null },
+                sheetState = sheetState,
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                scrimColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.4f),
+                dragHandle = {
+                    BottomSheetDefaults.DragHandle(
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                    )
+                }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 24.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "Select Pool Architecture",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    val options = listOf(
+                        "AUTO" to ("Auto-Detect" to "Automatically probe filesystems and RAID layouts."),
+                        "CACHE" to ("Standard Cache" to "Single-drive or pool utilizing standard XFS/BTRFS."),
+                        "ZFS_RAIDZ1" to ("ZFS (RAIDZ1)" to "Single parity, balanced performance and storage."),
+                        "ZFS_RAIDZ2" to ("ZFS (RAIDZ2)" to "Double parity, high fault tolerance."),
+                        "ZFS_RAIDZ3" to ("ZFS (RAIDZ3)" to "Triple parity, maximum fault tolerance."),
+                        "ZFS_MIRROR" to ("ZFS (Mirror)" to "1:1 data mirroring, extremely fast read speeds."),
+                        "ZFS_STRIPE" to ("ZFS (Stripe)" to "Data striping across disks, max capacity but zero parity."),
+                        "ZFS_SINGLE" to ("ZFS (Single)" to "Single-disk filesystem without redundancy.")
+                    )
+
+                    options.forEach { (typeKey, details) ->
+                        val (typeLabel, description) = details
+                        val isSelected = typeKey == currentType
+                        
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 56.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                                .clickable {
+                                    viewModel.savePoolType(targetPool, if (typeKey == "AUTO") "" else typeKey)
+                                    activePoolForBottomSheet = null
+                                }
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = typeLabel,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else Color.White,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                                Text(
+                                    text = description,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Selected",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
+        }
     }
 }
 
