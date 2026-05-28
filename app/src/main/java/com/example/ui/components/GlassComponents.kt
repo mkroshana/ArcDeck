@@ -14,6 +14,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -58,6 +60,7 @@ fun CircularMetricRing(
     accentColor: Color,
     modifier: Modifier = Modifier,
     strokeWidth: Dp = 14.dp,
+    trackColor: Color = Color.Unspecified,
     iconSection: @Composable (ColumnScope.() -> Unit)? = null
 ) {
     val animatedProgress = animateFloatAsState(
@@ -81,8 +84,9 @@ fun CircularMetricRing(
                 val radius = (sizeMin - strokePx) / 2
                 
                 // Track 1: Dark translucent background ring (low-opacity container)
+                val resolvedTrackColor = if (trackColor == Color.Unspecified) accentColor.copy(alpha = 0.1f) else trackColor
                 drawCircle(
-                    color = accentColor.copy(alpha = 0.1f),
+                    color = resolvedTrackColor,
                     radius = radius,
                     style = Stroke(width = strokePx)
                 )
@@ -109,7 +113,12 @@ fun CircularMetricRing(
                         color = Color.White,
                         fontSize = 36.sp,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = FontFamily.Monospace,
+                        style = TextStyle(
+                            platformStyle = PlatformTextStyle(
+                                includeFontPadding = false
+                            )
+                        )
                     )
                 }
             }

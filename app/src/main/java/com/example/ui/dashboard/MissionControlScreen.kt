@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -119,7 +120,7 @@ fun MissionControlScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.7f))
+                        .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.55f))
                         .drawBehind {
                             drawLine(
                                 color = Color.White.copy(alpha = 0.08f),
@@ -2375,6 +2376,21 @@ fun UnraidDetailView(
         return
     }
 
+    // Telemetry tick animations
+    val tempTarget = systemInfo?.cpu?.packages?.temp?.firstOrNull() ?: 37.0
+    val powerTarget = systemInfo?.cpu?.packages?.totalPower ?: 1.9
+
+    val animatedTemp by animateFloatAsState(
+        targetValue = tempTarget.toFloat(),
+        animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+        label = "tempAnimation"
+    )
+    val animatedPower by animateFloatAsState(
+        targetValue = powerTarget.toFloat(),
+        animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+        label = "powerAnimation"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -2413,59 +2429,145 @@ fun UnraidDetailView(
         // ---- System Info Card ----
         Text(
             text = "SYSTEM INFORMATION",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.labelLarge,
             color = AccentPulse,
             fontFamily = FontFamily.Monospace,
-            letterSpacing = 1.2.sp
+            letterSpacing = 1.5.sp,
+            modifier = Modifier.padding(bottom = 4.dp, top = 8.dp)
         )
 
         if (systemInfo != null) {
+            val cpuBrand = systemInfo.cpu?.brand ?: "—"
+            val coresThreads = "${systemInfo.cpu?.cores ?: "—"} / ${systemInfo.cpu?.threads ?: "—"}"
+            val unraidVersion = systemInfo.versions?.core?.unraid ?: "—"
+            val kernelVersion = systemInfo.os?.kernel ?: "—"
+            val hostname = systemInfo.os?.hostname ?: "Stark-Tower"
+            val hardware = "${systemInfo.system?.manufacturer ?: ""} ${systemInfo.system?.model ?: ""}".trim().ifBlank { "HP ProDesk 400 G4 MT" }
+            
+            val tempDisplay = "${DecimalFormat("#,##0.0").format(animatedTemp)}°C"
+            val powerDisplay = "${DecimalFormat("#,##0.0").format(animatedPower)} W"
+            val tempColor = if (animatedTemp < 50.0f) TechOk else TechWarning
+
             GlassmorphicCard(
                 modifier = Modifier.fillMaxWidth(),
-                borderColor = ThemeCardBorder,
-                fillColor = ThemeCardFill
+                cornerRadius = 24.dp,
+                borderColor = Color.Transparent,
+                fillColor = MaterialTheme.colorScheme.surfaceContainerHigh
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    systemInfo.os?.hostname?.let {
-                        SysInfoRow("Hostname", it)
-                    }
-                    systemInfo.system?.manufacturer?.let { mfg ->
-                        SysInfoRow("Hardware", "${mfg} ${systemInfo.system?.model ?: ""}")
-                    }
-                    systemInfo.cpu?.brand?.let {
-                        SysInfoRow("CPU", it)
-                    }
-                    systemInfo.cpu?.let { cpu ->
-                        SysInfoRow("Cores / Threads", "${cpu.cores ?: "—"} / ${cpu.threads ?: "—"}")
-                    }
-                    systemInfo.versions?.core?.unraid?.let {
-                        SysInfoRow("Unraid Version", it)
-                    }
-                    systemInfo.os?.kernel?.let {
-                        SysInfoRow("Kernel", it)
+                    // Header profile + telemetry chips
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = hostname,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = hardware,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = SecondaryTech
+                            )
+                        }
+                        
+                        // Chips column
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            // Temp Badge
+                            Box(
+                                modifier = Modifier
+                                    .heightIn(min = 32.dp)
+                                    .clip(CircleShape)
+                                    .background(tempColor.copy(alpha = 0.15f))
+                                    .padding(horizontal = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Thermostat,
+                                        contentDescription = "Temperature",
+                                        tint = tempColor,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = tempDisplay,
+                                        color = tempColor,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                            // Power Badge
+                            Box(
+                                modifier = Modifier
+                                    .heightIn(min = 32.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                                    .padding(horizontal = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Bolt,
+                                        contentDescription = "Power",
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = powerDisplay,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        }
                     }
 
-                    // Memory layout summary
-                    if (systemInfo.memory?.layout?.isNotEmpty() == true) {
-                        val totalMem = systemInfo.memory!!.layout.sumOf { it.size }
-                        val memGb = totalMem / 1_048_576.0
-                        val df = DecimalFormat("#,##0.0")
-                        val firstSlot = systemInfo.memory!!.layout.first()
-                        SysInfoRow("Memory", "${df.format(memGb)} GB ${firstSlot.type ?: ""} @ ${firstSlot.clockSpeed ?: "—"} MHz")
-                    }
+                    HorizontalDivider(
+                        modifier = Modifier.fillMaxWidth(),
+                        thickness = 1.dp,
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    )
 
-                    // CPU Package Temp
-                    systemInfo.cpu?.packages?.temp?.firstOrNull()?.let { temp ->
-                        SysInfoRow("CPU Temp", "${DecimalFormat("#,##0.0").format(temp)}°C")
-                    }
-                    systemInfo.cpu?.packages?.totalPower?.let { power ->
-                        SysInfoRow("CPU Power", "${DecimalFormat("#,##0.0").format(power)} W")
+                    // Two column specs grid with 20dp spacing (breathing room)
+                    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            SpecItem(label = "CPU", value = cpuBrand, modifier = Modifier.weight(1f))
+                            SpecItem(label = "Cores / Threads", value = coresThreads, modifier = Modifier.weight(1f))
+                        }
+                        HorizontalDivider(
+                            modifier = Modifier.fillMaxWidth(),
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            SpecItem(label = "Unraid Version", value = unraidVersion, modifier = Modifier.weight(1f))
+                            SpecItem(label = "Kernel", value = kernelVersion, modifier = Modifier.weight(1f))
+                        }
                     }
                 }
             }
@@ -2474,17 +2576,18 @@ fun UnraidDetailView(
         // ---- CPU & Memory Live Gauges ----
         Text(
             text = "LIVE UTILIZATION",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.labelLarge,
             color = AccentPulse,
             fontFamily = FontFamily.Monospace,
-            letterSpacing = 1.2.sp
+            letterSpacing = 1.5.sp,
+            modifier = Modifier.padding(bottom = 4.dp, top = 8.dp)
         )
 
         GlassmorphicCard(
             modifier = Modifier.fillMaxWidth(),
-            borderColor = ThemeCardBorder.copy(alpha = 0.6f),
-            fillColor = ThemeCardFill
+            cornerRadius = 24.dp,
+            borderColor = Color.Transparent,
+            fillColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
             Column(
                 modifier = Modifier
@@ -2499,17 +2602,20 @@ fun UnraidDetailView(
                     CircularMetricRing(
                         percentage = (cpuUtil?.percentTotal?.toFloat() ?: 0f),
                         title = "CPU Load",
-                        accentColor = PrimaryNeon
+                        accentColor = PrimaryNeon,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                     )
                     CircularMetricRing(
                         percentage = (memoryUtil?.percentTotal?.toFloat() ?: 0f),
                         title = "RAM Usage",
-                        accentColor = AccentPulse
+                        accentColor = AccentPulse,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                     )
                     CircularMetricRing(
                         percentage = (memoryUtil?.percentSwapTotal?.toFloat() ?: 0f),
                         title = "Swap",
-                        accentColor = TechWarning
+                        accentColor = TechWarning,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                     )
                 }
 
@@ -2524,8 +2630,9 @@ fun UnraidDetailView(
                     ) {
                         Text(
                             text = "RAM: ${df.format(usedGb)} / ${df.format(totalGb)} GB",
+                            style = MaterialTheme.typography.labelLarge,
                             color = SecondaryTech,
-                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
                             fontFamily = FontFamily.Monospace
                         )
                     }
@@ -2536,15 +2643,55 @@ fun UnraidDetailView(
         // ---- Docker Containers ----
         Text(
             text = "DOCKER CONTAINERS (${dockerContainers.size})",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.labelLarge,
             color = AccentPulse,
             fontFamily = FontFamily.Monospace,
-            letterSpacing = 1.2.sp
+            letterSpacing = 1.5.sp,
+            modifier = Modifier.padding(bottom = 4.dp, top = 8.dp)
         )
 
         if (dockerContainers.isEmpty()) {
-            Text(text = "No Docker containers found.", color = SecondaryTech, fontSize = 12.sp)
+            val emptyGlowColor = PrimaryNeon
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // soft primary radial glow background
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(90.dp)
+                        .drawBehind {
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        emptyGlowColor.copy(alpha = 0.12f),
+                                        Color.Transparent
+                                    ),
+                                    center = center,
+                                    radius = size.minDimension / 2
+                                ),
+                                radius = size.minDimension / 2
+                            )
+                        }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Inbox,
+                        contentDescription = "Empty State",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                        modifier = Modifier.size(54.dp)
+                    )
+                }
+                Text(
+                    text = "No Docker containers found",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center
+                )
+            }
         } else {
             dockerContainers.forEach { container ->
                 DockerContainerCard(container = container)
@@ -2554,15 +2701,55 @@ fun UnraidDetailView(
         // ---- Virtual Machines ----
         Text(
             text = "VIRTUAL MACHINES (${vms.size})",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.labelLarge,
             color = AccentPulse,
             fontFamily = FontFamily.Monospace,
-            letterSpacing = 1.2.sp
+            letterSpacing = 1.5.sp,
+            modifier = Modifier.padding(bottom = 4.dp, top = 8.dp)
         )
 
         if (vms.isEmpty()) {
-            Text(text = "No virtual machines found.", color = SecondaryTech, fontSize = 12.sp)
+            val emptyGlowColor = AccentPulse
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // soft tertiary radial glow background
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(90.dp)
+                        .drawBehind {
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        emptyGlowColor.copy(alpha = 0.12f),
+                                        Color.Transparent
+                                    ),
+                                    center = center,
+                                    radius = size.minDimension / 2
+                                ),
+                                radius = size.minDimension / 2
+                            )
+                        }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Inbox,
+                        contentDescription = "Empty State",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                        modifier = Modifier.size(54.dp)
+                    )
+                }
+                Text(
+                    text = "No virtual machines found",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center
+                )
+            }
         } else {
             vms.forEach { vm ->
                 UnraidVmCard(vm = vm)
@@ -2574,22 +2761,22 @@ fun UnraidDetailView(
 }
 
 @Composable
-fun SysInfoRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+fun SpecItem(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
             text = label,
-            color = SecondaryTech,
-            fontSize = 11.sp,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
             fontWeight = FontWeight.Medium
         )
         Text(
             text = value,
             color = Color.White,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
             fontFamily = FontFamily.Monospace
         )
     }
@@ -2607,8 +2794,9 @@ fun DockerContainerCard(container: UnraidDockerContainer) {
 
     GlassmorphicCard(
         modifier = Modifier.fillMaxWidth(),
-        borderColor = ThemeCardBorder.copy(alpha = 0.5f),
-        fillColor = ThemeCardFill
+        cornerRadius = 24.dp,
+        borderColor = Color.Transparent,
+        fillColor = MaterialTheme.colorScheme.surfaceContainer
     ) {
         Column(
             modifier = Modifier
@@ -2730,10 +2918,23 @@ fun UnraidVmCard(vm: UnraidVmDomain) {
     val df = remember { DecimalFormat("#,##0.0") }
     val memGb = vm.maxMemory?.let { it / 1_073_741_824.0 }
 
+    // Pulsing halo animation
+    val infiniteTransition = rememberInfiniteTransition(label = "vmStatusPulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+
     GlassmorphicCard(
         modifier = Modifier.fillMaxWidth(),
-        borderColor = ThemeCardBorder.copy(alpha = 0.5f),
-        fillColor = ThemeCardFill
+        cornerRadius = 24.dp,
+        borderColor = Color.Transparent,
+        fillColor = MaterialTheme.colorScheme.surfaceContainer
     ) {
         Column(
             modifier = Modifier
@@ -2747,23 +2948,23 @@ fun UnraidVmCard(vm: UnraidVmDomain) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    // Circular M3 Tonal Badge
                     Box(
                         modifier = Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(stateColor.copy(alpha = 0.08f))
-                            .border(1.dp, stateColor.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.secondaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "VM",
-                            color = stateColor,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp,
                             fontFamily = FontFamily.Monospace
                         )
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
                             text = vm.name,
@@ -2771,13 +2972,24 @@ fun UnraidVmCard(vm: UnraidVmDomain) {
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .background(stateColor, CircleShape)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                if (isRunning) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(12.dp)
+                                            .clip(CircleShape)
+                                            .background(stateColor.copy(alpha = (1f - pulseAlpha) * 0.4f))
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(stateColor)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = vm.state.replaceFirstChar { it.uppercase() },
                                 color = stateColor,
@@ -2791,15 +3003,15 @@ fun UnraidVmCard(vm: UnraidVmDomain) {
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = vm.vcpuCount?.let { "$it vCPU" } ?: "— vCPU",
+                        style = MaterialTheme.typography.bodySmall,
                         color = SecondaryTech,
-                        fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = memGb?.let { "${df.format(it)} GB RAM" } ?: "— RAM",
+                        style = MaterialTheme.typography.bodySmall,
                         color = SecondaryTech,
-                        fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
                     )
