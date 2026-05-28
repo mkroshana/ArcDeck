@@ -209,8 +209,8 @@ fun MissionControlScreen(
             ) {
                 val menuItems = listOf(
                     Triple("home", Icons.Default.Dashboard, "Dashboard"),
-                    Triple("compute", Icons.Default.Dns, "Proxmox"),
                     Triple("unraid", Icons.Default.Storage, "Unraid"),
+                    Triple("compute", Icons.Default.Dns, "Proxmox"),
                     Triple("media", Icons.Default.VideoLibrary, "Arr Stack")
                 )
 
