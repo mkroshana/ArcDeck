@@ -2,6 +2,7 @@
 package com.example.ui.dashboard
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -3066,8 +3067,8 @@ fun MediaQueueView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(ThemeCardFill)
+                .clip(RoundedCornerShape(50.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.5f))
                 .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -3078,19 +3079,28 @@ fun MediaQueueView(
             )
             tabs.forEach { (tabId, label) ->
                 val isSelected = currentSubTab == tabId
+                val animBgColor by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                    animationSpec = tween(durationMillis = 300),
+                    label = "TabBg"
+                )
+                val animTextColor by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                    animationSpec = tween(durationMillis = 300),
+                    label = "TabText"
+                )
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (isSelected) PrimaryNeon.copy(alpha = 0.15f) else Color.Transparent)
-                        .border(1.dp, if (isSelected) PrimaryNeon.copy(alpha = 0.4f) else Color.Transparent, RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(50.dp))
+                        .background(animBgColor)
                         .clickable { currentSubTab = tabId }
                         .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = label.uppercase(),
-                        color = if (isSelected) Color.White else SecondaryTech,
+                        color = animTextColor,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
@@ -3251,36 +3261,72 @@ fun MediaQueueView(
 fun HistoryItemRow(item: ArrHistoryItem) {
     val isGrabbed = item.eventType?.lowercase() == "grabbed"
     val icon = if (isGrabbed) Icons.Default.Refresh else Icons.Default.CheckCircle
-    val iconColor = if (isGrabbed) PrimaryNeon else TechOk
+    
+    val badgeBgColor = if (isGrabbed) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.tertiaryContainer
+    val badgeIconColor = if (isGrabbed) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
+
+    val rawTitle = item.sourceTitle ?: "Unknown Movie"
+    val lastSlash = rawTitle.lastIndexOf('/')
+    val lastBackslash = rawTitle.lastIndexOf('\\')
+    val lastSep = maxOf(lastSlash, lastBackslash)
+    val (dirPath, displayTitle) = if (lastSep >= 0 && lastSep < rawTitle.length - 1) {
+        Pair(rawTitle.substring(0, lastSep + 1), rawTitle.substring(lastSep + 1))
+    } else {
+        Pair(null, rawTitle)
+    }
 
     GlassmorphicCard(
-        modifier = Modifier.fillMaxWidth(),
-        borderColor = ThemeCardBorder,
-        fillColor = ThemeCardFill
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {},
+        cornerRadius = 24.dp,
+        borderWidth = 0.dp,
+        borderColor = Color.Transparent,
+        fillColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = item.eventType ?: "History Event",
-                tint = iconColor,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.sourceTitle ?: "Unknown Movie",
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp,
-                    maxLines = 2,
-                    lineHeight = 16.sp
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(badgeBgColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = item.eventType ?: "History Event",
+                    tint = badgeIconColor,
+                    modifier = Modifier.size(18.dp)
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                if (dirPath != null) {
+                    Text(
+                        text = dirPath,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                }
+                Text(
+                    text = displayTitle,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    lineHeight = 18.sp,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -3289,19 +3335,29 @@ fun HistoryItemRow(item: ArrHistoryItem) {
                     val quality = item.quality?.quality?.name ?: "Unknown Quality"
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color.White.copy(alpha = 0.08f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        Text(text = lang, color = SecondaryTech, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                        Text(
+                            text = lang, 
+                            color = MaterialTheme.colorScheme.onSecondaryContainer, 
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color.White.copy(alpha = 0.08f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        Text(text = quality, color = SecondaryTech, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                        Text(
+                            text = quality, 
+                            color = MaterialTheme.colorScheme.onTertiaryContainer, 
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
@@ -3333,8 +3389,8 @@ fun HistoryItemRow(item: ArrHistoryItem) {
             }
             Text(
                 text = displayDate,
-                color = SecondaryTech,
-                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelMedium,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold
             )
@@ -3352,19 +3408,40 @@ fun MovieLibraryCard(movie: ArrMovie, modifier: Modifier = Modifier) {
         if (!it.remoteUrl.isNullOrEmpty()) it.remoteUrl else it.url
     }
 
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val translateAnim = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmerTranslation"
+    )
+    val shimmerBrush = Brush.linearGradient(
+        colors = listOf(
+            Color.White.copy(alpha = 0.05f),
+            Color.White.copy(alpha = 0.15f),
+            Color.White.copy(alpha = 0.05f),
+        ),
+        start = Offset(translateAnim.value - 200f, translateAnim.value - 200f),
+        end = Offset(translateAnim.value + 200f, translateAnim.value + 200f)
+    )
+
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .border(1.dp, ThemeCardBorder, RoundedCornerShape(8.dp)),
-        colors = CardDefaults.cardColors(containerColor = ThemeCardFill)
+            .clip(RoundedCornerShape(24.dp))
+            .clickable { },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(0.67f)
-                    .background(Color.Black.copy(alpha = 0.2f)),
+                    .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                    .background(shimmerBrush),
                 contentAlignment = Alignment.Center
             ) {
                 if (!posterUrl.isNullOrEmpty()) {
@@ -3383,50 +3460,70 @@ fun MovieLibraryCard(movie: ArrMovie, modifier: Modifier = Modifier) {
                         modifier = Modifier.size(32.dp)
                     )
                 }
-            }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .background(if (movie.monitored) TechOk else TechMuted)
-            )
+                // Floating glassmorphic monitored status badge
+                Box(
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .align(Alignment.TopEnd)
+                        .clip(RoundedCornerShape(50.dp))
+                        .background(Color.Black.copy(alpha = 0.65f))
+                        .border(0.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(50.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(if (movie.monitored) TechOk else TechMuted)
+                        )
+                        Text(
+                            text = if (movie.monitored) "Monitored" else "Unmonitored",
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text = movie.title,
                     color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
-                Text(
-                    text = if (movie.monitored) "Monitored" else "Unmonitored",
-                    color = if (movie.monitored) TechOk else SecondaryTech,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium
+                    maxLines = 2,
+                    minLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    lineHeight = 18.sp
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "${movie.year}",
-                        color = SecondaryTech,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
                     )
                     Text(
                         text = sizeLabel,
-                        color = SecondaryTech,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
@@ -3449,18 +3546,31 @@ fun DownloadQueueItemRow(item: ArrQueueItem) {
 
     val itemStatusColor = if (isPaused) TechWarning else if (isDone) TechOk else PrimaryNeon
 
+    val rawTitle = item.title
+    val lastSlash = rawTitle.lastIndexOf('/')
+    val lastBackslash = rawTitle.lastIndexOf('\\')
+    val lastSep = maxOf(lastSlash, lastBackslash)
+    val (dirPath, displayTitle) = if (lastSep >= 0 && lastSep < rawTitle.length - 1) {
+        Pair(rawTitle.substring(0, lastSep + 1), rawTitle.substring(lastSep + 1))
+    } else {
+        Pair(null, rawTitle)
+    }
+
     GlassmorphicCard(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable { }
             .testTag("queue_item_${item.id}"),
-        borderColor = ThemeCardBorder,
-        fillColor = ThemeCardFill
+        cornerRadius = 24.dp,
+        borderWidth = 0.dp,
+        borderColor = Color.Transparent,
+        fillColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Header Title
             Row(
@@ -3469,13 +3579,25 @@ fun DownloadQueueItemRow(item: ArrQueueItem) {
                 verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
+                    if (dirPath != null) {
+                        Text(
+                            text = dirPath,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
                     Text(
-                        text = item.title,
+                        text = displayTitle,
                         color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
                         maxLines = 2,
-                        lineHeight = 16.sp
+                        lineHeight = 18.sp,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
 
@@ -3485,11 +3607,11 @@ fun DownloadQueueItemRow(item: ArrQueueItem) {
                     modifier = Modifier
                         .clip(RoundedCornerShape(50.dp))
                         .background(itemStatusColor.copy(alpha = 0.15f))
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text = item.status.uppercase(),
-                        fontSize = 9.sp,
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = itemStatusColor
                     )
@@ -3497,15 +3619,15 @@ fun DownloadQueueItemRow(item: ArrQueueItem) {
             }
 
             // progress bar and timeline speeds
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 LinearProgressIndicator(
                     progress = { progressPercent.toFloat() },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(5.dp)
+                        .height(8.dp)
                         .clip(RoundedCornerShape(50.dp)),
                     color = itemStatusColor,
-                    trackColor = ThemeCardBorder
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                 )
 
                 Row(
@@ -3515,8 +3637,8 @@ fun DownloadQueueItemRow(item: ArrQueueItem) {
                 ) {
                     Text(
                         text = progressLabel,
-                        color = SecondaryTech,
-                        fontSize = 11.sp
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
                     )
 
                     Row(
