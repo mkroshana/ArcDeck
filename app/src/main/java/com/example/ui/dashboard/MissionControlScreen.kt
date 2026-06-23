@@ -70,6 +70,7 @@ fun MissionControlScreen(
     val arrUrlValue by viewModel.arrUrl.collectAsStateWithLifecycle()
     val arrApiKeyVal by viewModel.arrApiKey.collectAsStateWithLifecycle()
     val useDemo by viewModel.useDemoMode.collectAsStateWithLifecycle()
+    val allowSelfSigned by viewModel.allowSelfSignedCerts.collectAsStateWithLifecycle()
 
     // api list values
     val pveResources by viewModel.proxmoxResources.collectAsStateWithLifecycle()
@@ -293,7 +294,8 @@ fun MissionControlScreen(
                     initialUnToken = unToken,
                     initialArrUrl = arrUrlValue,
                     initialArrApiKey = arrApiKeyVal,
-                    initialUseDemo = useDemo
+                    initialUseDemo = useDemo,
+                    initialAllowSelfSigned = allowSelfSigned
                 )
             }
         }
@@ -3686,7 +3688,8 @@ fun SettingsView(
     initialUnToken: String,
     initialArrUrl: String,
     initialArrApiKey: String,
-    initialUseDemo: Boolean
+    initialUseDemo: Boolean,
+    initialAllowSelfSigned: Boolean
 ) {
     var pveUrl by remember { mutableStateOf(if (initialPveUrl.isEmpty()) "https://10.10.10.31:8006" else initialPveUrl) }
     var pveToken by remember { mutableStateOf(initialPveToken) }
@@ -3699,6 +3702,7 @@ fun SettingsView(
     var arrApiKey by remember { mutableStateOf(initialArrApiKey) }
 
     var useDemo by remember { mutableStateOf(initialUseDemo) }
+    var allowSelfSigned by remember { mutableStateOf(initialAllowSelfSigned) }
     var activePoolForBottomSheet by remember { mutableStateOf<String?>(null) }
 
     val unraidArray by viewModel.unraidArray.collectAsStateWithLifecycle()
@@ -3779,6 +3783,61 @@ fun SettingsView(
                             uncheckedIconColor = MaterialTheme.colorScheme.onSurfaceVariant
                         ),
                         modifier = Modifier.testTag("settings_demo_switch")
+                    )
+                }
+            }
+
+            // TLS trust policy strip
+            GlassmorphicCard(
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 24.dp,
+                borderWidth = 0.dp,
+                borderColor = Color.Transparent,
+                fillColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Allow Self-Signed Certificates",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (allowSelfSigned)
+                                "TLS certificate and hostname validation is disabled. Turn off to enforce validation."
+                            else
+                                "TLS certificates are validated. Self-signed endpoints will fail to connect.",
+                            color = if (allowSelfSigned) TechWarning else MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    Switch(
+                        checked = allowSelfSigned,
+                        onCheckedChange = { allowSelfSigned = it },
+                        thumbContent = {
+                            Icon(
+                                imageVector = if (allowSelfSigned) Icons.Default.Check else Icons.Default.Close,
+                                contentDescription = null,
+                                modifier = Modifier.size(SwitchDefaults.IconSize)
+                            )
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                            uncheckedThumbColor = MaterialTheme.colorScheme.surfaceVariant,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            uncheckedIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        modifier = Modifier.testTag("settings_self_signed_switch")
                     )
                 }
             }
@@ -4100,7 +4159,8 @@ fun SettingsView(
                     pveUrl = pveUrl, pveToken = pveToken, pveNode = pveNode,
                     unUrl = unUrl, unToken = unToken,
                     aUrl = arrUrl, aKey = arrApiKey,
-                    demo = useDemo
+                    demo = useDemo,
+                    allowSelfSigned = allowSelfSigned
                 )
             },
             modifier = Modifier

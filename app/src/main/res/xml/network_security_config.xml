@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ArcDeck connects to user-supplied homelab endpoints (Proxmox, Unraid, *Arr) that
+  commonly run over plain HTTP on a trusted LAN. Cleartext is therefore permitted by
+  default. Android's network-security-config cannot express private-IP (RFC1918) ranges
+  in <domain> entries, so cleartext is allowed globally rather than scoped by subnet.
+
+  TLS endpoints still use the system trust store unless the user explicitly enables
+  "Allow Self-Signed Certificates" in Settings.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

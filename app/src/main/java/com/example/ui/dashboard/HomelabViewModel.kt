@@ -36,17 +36,23 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
     private val sharedPrefs = application.getSharedPreferences("homelab_settings", Context.MODE_PRIVATE)
 
     // Persistent API Settings
-    val proxmoxUrl = MutableStateFlow(sharedPrefs.getString("proxmox_url", "https://192.168.1.10:8006") ?: "https://192.168.1.10:8006")
-    val proxmoxToken = MutableStateFlow(sharedPrefs.getString("proxmox_token", "PVEAPIToken=root@pam!token-name=123456-abc") ?: "PVEAPIToken=root@pam!token-name=123456-abc")
-    val proxmoxNode = MutableStateFlow(sharedPrefs.getString("proxmox_node", "pve") ?: "pve")
-    
-    val unraidUrl = MutableStateFlow(sharedPrefs.getString("unraid_url", "http://192.168.1.15:80/graphql") ?: "http://192.168.1.15:80/graphql")
-    val unraidToken = MutableStateFlow(sharedPrefs.getString("unraid_token", "X-Unraid-Secret-Auth") ?: "X-Unraid-Secret-Auth")
-    
-    val arrUrl = MutableStateFlow(sharedPrefs.getString("arr_url", "http://192.168.1.20:8989") ?: "http://192.168.1.20:8989")
-    val arrApiKey = MutableStateFlow(sharedPrefs.getString("arr_api_key", "X-Api-Key-12345-abc") ?: "X-Api-Key-12345-abc")
+    // Credentials default to empty — Demo Mode (below) gates real network calls until the
+    // user supplies their own values in Settings. No placeholder secrets are baked into source.
+    val proxmoxUrl = MutableStateFlow(sharedPrefs.getString("proxmox_url", "") ?: "")
+    val proxmoxToken = MutableStateFlow(sharedPrefs.getString("proxmox_token", "") ?: "")
+    val proxmoxNode = MutableStateFlow(sharedPrefs.getString("proxmox_node", "") ?: "")
+
+    val unraidUrl = MutableStateFlow(sharedPrefs.getString("unraid_url", "") ?: "")
+    val unraidToken = MutableStateFlow(sharedPrefs.getString("unraid_token", "") ?: "")
+
+    val arrUrl = MutableStateFlow(sharedPrefs.getString("arr_url", "") ?: "")
+    val arrApiKey = MutableStateFlow(sharedPrefs.getString("arr_api_key", "") ?: "")
     
     val useDemoMode = MutableStateFlow(sharedPrefs.getBoolean("demo_mode", true))
+
+    // When on, the network stack trusts self-signed / invalid TLS certificates — convenient
+    // for out-of-the-box Proxmox/Unraid endpoints. Turn off to enforce certificate validation.
+    val allowSelfSignedCerts = MutableStateFlow(sharedPrefs.getBoolean("allow_self_signed", true))
 
     val unraidPoolTypes = MutableStateFlow<Map<String, String>>(emptyMap())
 
@@ -78,35 +84,55 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
         sharedPrefs.edit().putString("unraid_pool_types", serialized).apply()
     }
 
-    // OkHttp & Moshi for Clean Architecture network repos
-    private val okHttpClient: OkHttpClient = try {
-        val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
-            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
-            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
-            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
-        })
-
-        val sslContext = SSLContext.getInstance("SSL")
-        sslContext.init(null, trustAllCerts, SecureRandom())
-
-        OkHttpClient.Builder()
-            .connectTimeout(5, TimeUnit.SECONDS)
-            .readTimeout(8, TimeUnit.SECONDS)
-            .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
-            .hostnameVerifier(HostnameVerifier { _, _ -> true })
-            .build()
-    } catch (e: Exception) {
-        OkHttpClient.Builder()
-            .connectTimeout(5, TimeUnit.SECONDS)
-            .readTimeout(8, TimeUnit.SECONDS)
-            .build()
-    }
-
     private val moshi = Moshi.Builder().build()
 
-    private val proxmoxRepository = ProxmoxRepository(okHttpClient)
-    private val unraidRepository = UnraidRepository(UnraidGraphQLClient(okHttpClient, moshi))
-    private val arrRepository = ArrRepository(okHttpClient)
+    // OkHttp client and repositories are rebuilt whenever the TLS trust policy changes,
+    // so the new setting applies without an app restart.
+    private var okHttpClient: OkHttpClient = buildOkHttpClient(allowSelfSignedCerts.value)
+    private var proxmoxRepository = ProxmoxRepository(okHttpClient)
+    private var unraidRepository = UnraidRepository(UnraidGraphQLClient(okHttpClient, moshi))
+    private var arrRepository = ArrRepository(okHttpClient)
+
+    /**
+     * Build the shared OkHttp client. When [allowSelfSigned] is true the client accepts any
+     * certificate and hostname (trust-all); otherwise the platform's default certificate and
+     * hostname validation is enforced.
+     */
+    private fun buildOkHttpClient(allowSelfSigned: Boolean): OkHttpClient {
+        val builder = OkHttpClient.Builder()
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(8, TimeUnit.SECONDS)
+
+        if (!allowSelfSigned) {
+            return builder.build()
+        }
+
+        return try {
+            val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+                override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+            })
+
+            val sslContext = SSLContext.getInstance("TLS")
+            sslContext.init(null, trustAllCerts, SecureRandom())
+
+            builder
+                .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
+                .hostnameVerifier(HostnameVerifier { _, _ -> true })
+                .build()
+        } catch (e: Exception) {
+            builder.build()
+        }
+    }
+
+    /** Recreate the client and repositories using the current trust policy. */
+    private fun rebuildNetworkStack() {
+        okHttpClient = buildOkHttpClient(allowSelfSignedCerts.value)
+        proxmoxRepository = ProxmoxRepository(okHttpClient)
+        unraidRepository = UnraidRepository(UnraidGraphQLClient(okHttpClient, moshi))
+        arrRepository = ArrRepository(okHttpClient)
+    }
 
     private var fastRefreshJob: Job? = null
     private var mediumRefreshJob: Job? = null
@@ -573,9 +599,12 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
         pveUrl: String, pveToken: String, pveNode: String,
         unUrl: String, unToken: String,
         aUrl: String, aKey: String,
-        demo: Boolean
+        demo: Boolean,
+        allowSelfSigned: Boolean
     ) {
         viewModelScope.launch {
+            val trustPolicyChanged = allowSelfSignedCerts.value != allowSelfSigned
+
             sharedPrefs.edit()
                 .putString("proxmox_url", pveUrl)
                 .putString("proxmox_token", pveToken)
@@ -585,6 +614,7 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
                 .putString("arr_url", aUrl)
                 .putString("arr_api_key", aKey)
                 .putBoolean("demo_mode", demo)
+                .putBoolean("allow_self_signed", allowSelfSigned)
                 .apply()
 
             proxmoxUrl.value = pveUrl
@@ -595,6 +625,21 @@ class HomelabViewModel(application: Application) : AndroidViewModel(application)
             arrUrl.value = aUrl
             arrApiKey.value = aKey
             useDemoMode.value = demo
+            allowSelfSignedCerts.value = allowSelfSigned
+
+            // Rebuild the network stack so the new TLS trust policy applies immediately.
+            if (trustPolicyChanged) {
+                rebuildNetworkStack()
+                repository.insertTerminalLog(TerminalLog(
+                    timestamp = System.currentTimeMillis(),
+                    level = if (allowSelfSigned) "WARN" else "INFO",
+                    source = "SYS",
+                    message = if (allowSelfSigned)
+                        "TLS certificate validation DISABLED (self-signed certificates allowed)."
+                    else
+                        "TLS certificate validation ENABLED."
+                ))
+            }
 
             repository.insertTerminalLog(TerminalLog(
                 timestamp = System.currentTimeMillis(),
